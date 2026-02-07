@@ -29,8 +29,8 @@ app.add_middleware(
 
 # --- CLIENTS ---
 # Your Keys
-client = OpenAI(api_key="PLACEHOLDER")
-eleven_client = ElevenLabs(api_key="PLACEHOLDER")
+client = OpenAI(api_key="")
+eleven_client = ElevenLabs(api_key="")
 
 # Voice ID: "pNInz6obpgDQGcFmaJgB" (Adam) is deep and cynical
 GENIE_VOICE_ID = "pNInz6obpgDQGcFmaJgB"
@@ -89,6 +89,40 @@ OUTPUT FORMAT (JSON ONLY):
   "congrats_voice": "Backhanded verdict... e.g., 'It fits the law... technically. I suppose you may pass.'"
 }
 """
+@app.get("/get_rules")
+async def get_rules():
+    """Generates 3 Laws and 3 Mystical Clues for the player."""
+    try:
+        response = client.chat.completions.create(
+            model="gpt-4o",
+            messages=[
+                {"role": "system", "content": """
+                You are a cynical Genie game designer. Generate 3 unique laws for 3 doors.
+                
+                FORMAT: Return a JSON object with a list called 'doors'.
+                Each door must have:
+                1. 'law': A strict physical requirement (e.g., 'Must be made of gold').
+                2. 'clue': A cryptic, cynical hint for the player (e.g., 'Only that which glitters like the sun's greed shall pass').
+                
+                GUIDELINES:
+                - Laws must be physical (color, material, weight, or shape).
+                - Clues should be atmospheric and 'Genie-like' but helpful.
+                """},
+                {"role": "user", "content": "Generate 3 laws and clues."}
+            ],
+            response_format={"type": "json_object"}
+        )
+        return json.loads(response.choices[0].message.content)
+    except Exception as e:
+        print(f"❌ Error: {e}")
+        # Robust Fallback
+        return {
+            "doors": [
+                {"law": "Must be red", "clue": "Bring me the color of a fresh wound... or a strawberry."},
+                {"law": "Must be metal", "clue": "Only the cold, unfeeling iron of the earth opens this path."},
+                {"law": "Must be round", "clue": "I seek an object with no beginning and no end."}
+            ]
+        }
 
 @app.post("/process_wish")
 async def process_wish(
