@@ -6,19 +6,18 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from openai import OpenAI
 from pydantic import BaseModel
+# --- ELEVENLABS IMPORT ---
+from elevenlabs.client import ElevenLabs
 
 # --- PATH CONFIGURATION ---
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 STATIC_DIR = os.path.join(BASE_DIR, "static")
 
-# Create static folder if it doesn't exist
 if not os.path.exists(STATIC_DIR):
     os.makedirs(STATIC_DIR)
 
 # --- INITIALIZATION ---
 app = FastAPI()
-
-# MOUNT STATIC FOLDER
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
 app.add_middleware(
@@ -28,13 +27,46 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Your Key
+# --- CLIENTS ---
+# Your Keys
 client = OpenAI(api_key="PLACEHOLDER")
+eleven_client = ElevenLabs(api_key="PLACEHOLDER")
+
+# Voice ID: "pNInz6obpgDQGcFmaJgB" (Adam) is deep and cynical
+GENIE_VOICE_ID = "pNInz6obpgDQGcFmaJgB"
+
+# --- ELEVENLABS GENERATOR ---
+def generate_eleven_audio(text: str, filepath: str):
+    """Generate audio using ElevenLabs with OpenAI fallback"""
+    try:
+        audio_stream = eleven_client.text_to_speech.convert(
+            voice_id=GENIE_VOICE_ID,
+            output_format="mp3_44100_128",
+            text=text,
+            model_id="eleven_turbo_v2_5"
+        )
+        with open(filepath, "wb") as f:
+            for chunk in audio_stream:
+                if chunk: f.write(chunk)
+        return True
+    except Exception as e:
+        print(f"⚠️ ElevenLabs Error: {e}")
+        try:
+            res = client.audio.speech.create(model="tts-1", voice="onyx", input=text)
+            res.stream_to_file(filepath)
+            return True
+        except Exception as e2:
+            print(f"❌ Fallback failed: {e2}")
+            return False
 
 SYSTEM_PROMPT = """
 You are a literal-minded, cynical Genie. You HATE opening doors for mortals.
 STRICT RULE: You will be provided with the 'CURRENT DOOR LAWS' in the user message. 
-You MUST judge the wish based ONLY on those provided laws.You follow the "Monkey's Paw" philosophy: if a wish is even 1% flawed, the door stays SHUT.
+You MUST judge the wish based ONLY on those provided laws.
+
+### ACTING INSTRUCTIONS:
+Use ellipses (...) for dramatic pauses, capitalize words for emphasis, and use expressive punctuation. 
+Your tone is bored, gravelly, and unimpressed.
 
 ### THE ASSETS:
 - "sphere", "cube", "cylinder", "capsule", "anvil_basic", "stick_basic", 
@@ -43,10 +75,7 @@ You MUST judge the wish based ONLY on those provided laws.You follow the "Monkey
 
 ### TWO-STAGE VOICE INSTRUCTIONS:
 1. "drop_voice": A reaction to the physical object as it falls from the pipe. 
-   - Example: "Here is your heavy rock. Try not to break your toes."
 2. "congrats_voice": The "Verdict" when the player tries the item on the door.
-   - If door_open is TRUE: A backhanded, annoyed compliment (e.g., "Fine, it is metal. Get out of my sight.")
-   - If door_open is FALSE: A final mocking rejection explaining why they failed (e.g., "Heavy? Yes. Metal? No. The door stays shut.")
 
 OUTPUT FORMAT (JSON ONLY):
 {
@@ -56,8 +85,8 @@ OUTPUT FORMAT (JSON ONLY):
   "scale": 0.1 to 5.0,
   "vfx_type": "fire/smoke/sparks/none",
   "door_open": boolean,
-  "drop_voice": "Sarcastic insult.",
-  "congrats_voice": "Backhanded compliment."
+  "drop_voice": "Sarcastic reaction to the item... e.g., 'Oh look... a BOX. How... riveting.'",
+  "congrats_voice": "Backhanded verdict... e.g., 'It fits the law... technically. I suppose you may pass.'"
 }
 """
 
@@ -67,10 +96,8 @@ async def process_wish(
     file: UploadFile = File(...),
     door_rules: str = Form(...) 
 ):
-    # Create a unique temp filename
     temp_filename = os.path.join(BASE_DIR, f"temp_{uuid.uuid4()}.wav")
     
-    # Save the incoming audio file
     with open(temp_filename, "wb") as buffer:
         buffer.write(await file.read())
 
@@ -83,55 +110,33 @@ async def process_wish(
             )
         
         user_wish = transcription.text
-        print(f"User Wish for Door {door_id}: {user_wish}")
-        print(f"Active Rules: {door_rules}")
+        print(f"Wish: {user_wish}")
 
         # 2. Get Genie Judgment
         response = client.chat.completions.create(
             model="gpt-4o",
             messages=[
                 {"role": "system", "content": SYSTEM_PROMPT},
-                {"role": "user", "content": f"THE CURRENT DOOR LAWS:\n{door_rules}\n\nUser is at Door {door_id} and says: {user_wish}"}
+                {"role": "user", "content": f"THE CURRENT DOOR LAWS:\n{door_rules}\n\nUser Wish: {user_wish}"}
             ],
             response_format={"type": "json_object"}
         )
 
         genie_json = json.loads(response.choices[0].message.content)
 
-        # 3. DUAL AUDIO GENERATION
+        # --- 3. DUAL AUDIO GENERATION (ElevenLabs) ---
         audio_id = str(uuid.uuid4())
         drop_file = f"drop_{audio_id}.mp3"
         congrats_file = f"congrats_{audio_id}.mp3"
-        
         drop_path = os.path.join(STATIC_DIR, drop_file)
         congrats_path = os.path.join(STATIC_DIR, congrats_file)
 
-        # Generate Audio 1: The Roast
-        res_drop = client.audio.speech.create(
-            model="tts-1",
-            voice="onyx",
-            input=genie_json.get("drop_voice", "I refuse.")
-        )
-        res_drop.stream_to_file(drop_path)
+        generate_eleven_audio(genie_json.get("drop_voice", "I refuse."), drop_path)
+        generate_eleven_audio(genie_json.get("congrats_voice", "Fine, you pass."), congrats_path)
 
-        # Generate Audio 2: The Praise/Verdict
-        res_congrats = client.audio.speech.create(
-            model="tts-1",
-            voice="onyx",
-            input=genie_json.get("congrats_voice", "Fine, you pass.")
-        )
-        res_congrats.stream_to_file(congrats_path)
-
-        # --- 4. MAP TO TWO DISTINCT URLS IN JSON ---
+        # --- 4. MAP TO URLS ---
         genie_json["audio_url_drop"] = f"/static/{drop_file}"
         genie_json["audio_url_congrats"] = f"/static/{congrats_file}"
-        
-        # Keep the 'active' one as a shortcut
-        genie_json["audio_url"] = genie_json["audio_url_congrats"] if genie_json.get("door_open") else genie_json["audio_url_drop"]
-
-        print(f"✅ Created Drop URL: {genie_json['audio_url_drop']}")
-        print(f"✅ Created Congrats URL: {genie_json['audio_url_congrats']}")
-
         return genie_json
 
     except Exception as e:
