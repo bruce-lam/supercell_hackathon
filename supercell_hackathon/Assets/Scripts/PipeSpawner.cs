@@ -57,10 +57,10 @@ public class PipeSpawner : MonoBehaviour
         // Find the prefab by name
         foreach (var prefab in itemPrefabs)
         {
-            if (prefab != null && prefab.name.ToLower() == itemName.ToLower())
-            {
-                return DoSpawn(prefab);
-            }
+            try {
+                if (prefab != null && prefab.name.ToLower() == itemName.ToLower())
+                    return DoSpawn(prefab);
+            } catch (MissingReferenceException) { continue; }
         }
 
         Debug.LogWarning($"[PipeSpawner] Item '{itemName}' not found in prefab list!");
@@ -78,8 +78,17 @@ public class PipeSpawner : MonoBehaviour
             return null;
         }
 
-        int index = Random.Range(0, itemPrefabs.Length);
-        return DoSpawn(itemPrefabs[index]);
+        // Try up to 5 times to find a valid (non-null) prefab
+        for (int attempt = 0; attempt < 5; attempt++)
+        {
+            int index = Random.Range(0, itemPrefabs.Length);
+            try {
+                if (itemPrefabs[index] != null)
+                    return DoSpawn(itemPrefabs[index]);
+            } catch (MissingReferenceException) { continue; }
+        }
+        Debug.LogWarning("[PipeSpawner] Could not find valid prefab after retries");
+        return null;
     }
 
     private GameObject DoSpawn(GameObject prefab)
@@ -89,6 +98,26 @@ public class PipeSpawner : MonoBehaviour
         Vector3 spawnPos = transform.position + transform.TransformDirection(spawnOffset);
         GameObject item = Instantiate(prefab, spawnPos, Random.rotation);
         item.name = prefab.name; // Remove "(Clone)" suffix
+
+        // Ensure item has a collider (auto-fit if missing)
+        if (item.GetComponentInChildren<Collider>() == null)
+        {
+            Renderer[] renderers = item.GetComponentsInChildren<Renderer>();
+            if (renderers.Length > 0)
+            {
+                Bounds bounds = renderers[0].bounds;
+                for (int i = 1; i < renderers.Length; i++)
+                    bounds.Encapsulate(renderers[i].bounds);
+
+                BoxCollider bc = item.AddComponent<BoxCollider>();
+                bc.center = item.transform.InverseTransformPoint(bounds.center);
+                bc.size = bounds.size;
+            }
+            else
+            {
+                item.AddComponent<BoxCollider>();
+            }
+        }
 
         // Apply physics
         Rigidbody rb = item.GetComponent<Rigidbody>();

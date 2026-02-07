@@ -132,10 +132,20 @@ public class ItemPrefabGenerator : MonoBehaviour
         obj.name = item.name;
         obj.transform.localScale = item.scale;
 
-        // Create and assign a URP Lit material
-        Material mat = new Material(Shader.Find("Universal Render Pipeline/Lit"));
+        // Create material by CLONING the pipeline default (fixes grey/pink in Unity 6)
+        Material mat;
+        var pipeline = UnityEngine.Rendering.GraphicsSettings.currentRenderPipeline;
+        if (pipeline != null && pipeline.defaultMaterial != null)
+        {
+            mat = new Material(pipeline.defaultMaterial);
+        }
+        else
+        {
+            mat = new Material(Shader.Find("Universal Render Pipeline/Lit"));
+        }
         mat.color = item.color;
-        mat.SetColor("_BaseColor", item.color);
+        if (mat.HasProperty("_BaseColor")) mat.SetColor("_BaseColor", item.color);
+        if (mat.HasProperty("_Color")) mat.SetColor("_Color", item.color);
         mat.SetFloat("_Smoothness", 0.5f);
 
         string matPath = $"{basePath}/Materials";
