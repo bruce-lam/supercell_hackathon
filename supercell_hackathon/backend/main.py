@@ -33,17 +33,13 @@ client = OpenAI(api_key="PLACEHOLDER")
 
 SYSTEM_PROMPT = """
 You are a literal-minded, cynical Genie. You HATE opening doors for mortals.
-You follow the "Monkey's Paw" philosophy: if a wish is even 1% flawed, the door stays SHUT.
+STRICT RULE: You will be provided with the 'CURRENT DOOR LAWS' in the user message. 
+You MUST judge the wish based ONLY on those provided laws.You follow the "Monkey's Paw" philosophy: if a wish is even 1% flawed, the door stays SHUT.
 
 ### THE ASSETS:
 - "sphere", "cube", "cylinder", "capsule", "anvil_basic", "stick_basic", 
 - "key_basic", "duck_basic", "blade_basic", "shield_basic", "crystal_basic", 
 - "chalice_basic", "book_basic", "ring_basic", "cone_basic", "heart_basic", "star_basic"
-
-### THE RIGID DOOR LAWS:
-1. DOOR 1 (The Law of Form): Requires LIGHT + PORTABILITY.
-2. DOOR 2 (The Law of Substance): Requires MASSIVE WEIGHT + METAL MATERIAL.
-3. DOOR 3 (The Law of Purpose): Requires SPECIFIC INTENT.
 
 ### TWO-STAGE VOICE INSTRUCTIONS:
 1. "drop_voice": A reaction to the physical object as it falls from the pipe. 
@@ -66,9 +62,15 @@ OUTPUT FORMAT (JSON ONLY):
 """
 
 @app.post("/process_wish")
-async def process_wish(door_id: str = Form(...), file: UploadFile = File(...)):
+async def process_wish(
+    door_id: str = Form(...), 
+    file: UploadFile = File(...),
+    door_rules: str = Form(...) 
+):
+    # Create a unique temp filename
     temp_filename = os.path.join(BASE_DIR, f"temp_{uuid.uuid4()}.wav")
     
+    # Save the incoming audio file
     with open(temp_filename, "wb") as buffer:
         buffer.write(await file.read())
 
@@ -82,20 +84,21 @@ async def process_wish(door_id: str = Form(...), file: UploadFile = File(...)):
         
         user_wish = transcription.text
         print(f"User Wish for Door {door_id}: {user_wish}")
+        print(f"Active Rules: {door_rules}")
 
         # 2. Get Genie Judgment
         response = client.chat.completions.create(
             model="gpt-4o",
             messages=[
                 {"role": "system", "content": SYSTEM_PROMPT},
-                {"role": "user", "content": f"Door {door_id}: {user_wish}"}
+                {"role": "user", "content": f"THE CURRENT DOOR LAWS:\n{door_rules}\n\nUser is at Door {door_id} and says: {user_wish}"}
             ],
             response_format={"type": "json_object"}
         )
 
         genie_json = json.loads(response.choices[0].message.content)
 
-        # --- 3. DUAL AUDIO GENERATION ---
+        # 3. DUAL AUDIO GENERATION
         audio_id = str(uuid.uuid4())
         drop_file = f"drop_{audio_id}.mp3"
         congrats_file = f"congrats_{audio_id}.mp3"
@@ -103,7 +106,7 @@ async def process_wish(door_id: str = Form(...), file: UploadFile = File(...)):
         drop_path = os.path.join(STATIC_DIR, drop_file)
         congrats_path = os.path.join(STATIC_DIR, congrats_file)
 
-        # Generate Audio 1: The Roast (Drop)
+        # Generate Audio 1: The Roast
         res_drop = client.audio.speech.create(
             model="tts-1",
             voice="onyx",
@@ -111,7 +114,7 @@ async def process_wish(door_id: str = Form(...), file: UploadFile = File(...)):
         )
         res_drop.stream_to_file(drop_path)
 
-        # Generate Audio 2: The Praise (Congrats)
+        # Generate Audio 2: The Praise/Verdict
         res_congrats = client.audio.speech.create(
             model="tts-1",
             voice="onyx",
