@@ -33,14 +33,14 @@ public class PipeSpawner : MonoBehaviour
 
     void Update()
     {
-        var keyboard = Keyboard.current;
-        if (keyboard == null) return;
-
-        // Press F to spawn a random item
-        if (keyboard.fKey.wasPressedThisFrame && Time.time - lastSpawnTime > spawnCooldown)
-        {
-            SpawnRandomItem();
-        }
+        // F-key debug spawning disabled — spawning is handled by GenieClient
+        // which correctly targets only the active room's PipeSpawner.
+        // var keyboard = Keyboard.current;
+        // if (keyboard == null) return;
+        // if (keyboard.fKey.wasPressedThisFrame && Time.time - lastSpawnTime > spawnCooldown)
+        // {
+        //     SpawnRandomItem();
+        // }
     }
 
     /// <summary>

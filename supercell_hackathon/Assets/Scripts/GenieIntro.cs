@@ -27,7 +27,7 @@ public class GenieIntro : MonoBehaviour
     public TextMeshProUGUI hintText;
 
     [Header("Timing")]
-    public float introDelay = 2f;
+    public float introDelay = 0f;
     public float subtitleFadeSpeed = 2f;
 
     private AudioSource audioSource;
