@@ -955,9 +955,9 @@ MonoBehaviour:
   - {fileID: 1824753966}
   - {fileID: 288331044}
   - {fileID: 232990812}
-  vfxFire: {fileID: 1282100511560845127, guid: 08352dbc3794747d7b0455583e686955, type: 3}
-  vfxSmoke: {fileID: 279378192929699520, guid: 04bb420ad6221431082837d6d85f0635, type: 3}
-  vfxSparks: {fileID: 4788926222533508577, guid: 722c147f80f7f47d7aac5994bca6f6ac, type: 3}
+  vfxFire: {fileID: 0}
+  vfxSmoke: {fileID: 0}
+  vfxSparks: {fileID: 0}
   doorOpenSFX: {fileID: 8300000, guid: 1773c07944b6a43178931c2b6e294d02, type: 3}
   successSFX: {fileID: 0}
   failSFX: {fileID: 0}
@@ -995,7 +995,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::BackgroundMusic
   backgroundClip: {fileID: 8300000, guid: c08bde0124f194b1ea73271fe8e6a189, type: 3}
   resourceName: BackgroundMusic
-  volume: 0.117
+  volume: 0.063
   persistAcrossScenes: 1
 --- !u!82 &237284810
 AudioSource:
