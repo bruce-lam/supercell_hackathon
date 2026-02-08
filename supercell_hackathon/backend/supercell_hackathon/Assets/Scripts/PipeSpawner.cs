@@ -1,0 +1,269 @@
+using UnityEngine;
+using UnityEngine.InputSystem;
+
+/// <summary>
+/// Attach to the Pipe GameObject. Spawns random items from the pipe opening.
+/// Press F to spawn an item during play mode.
+/// Can also be triggered from other scripts via SpawnItem() or SpawnRandomItem().
+/// </summary>
+public class PipeSpawner : MonoBehaviour
+{
+    [Header("Item Prefabs")]
+    [Tooltip("Drag all item prefabs from Assets/Prefabs/Items here")]
+    public GameObject[] itemPrefabs;
+
+    [Header("Spawn Settings")]
+    public Vector3 spawnOffset = new Vector3(0f, -0.5f, 0f); // Below pipe
+    public float dropForce = 2f;
+    public float spawnCooldown = 0.5f;
+    public bool addRandomSpin = true;
+
+    [Header("Cleanup")]
+    public float destroyAfterSeconds = 30f;
+
+    private float lastSpawnTime = 0f;
+
+    void Start()
+    {
+        int count = (itemPrefabs != null) ? itemPrefabs.Length : 0;
+        Debug.Log($"[PipeSpawner] Ready! {count} item prefabs loaded. Press F to spawn.");
+        if (count == 0)
+            Debug.LogError("[PipeSpawner] ERROR: No prefabs assigned! Run Hypnagogia > Assign Items to Pipe Spawner");
+    }
+
+    void Update()
+    {
+        // F-key debug spawning disabled — spawning is handled by GenieClient
+        // which correctly targets only the active room's PipeSpawner.
+        // var keyboard = Keyboard.current;
+        // if (keyboard == null) return;
+        // if (keyboard.fKey.wasPressedThisFrame && Time.time - lastSpawnTime > spawnCooldown)
+        // {
+        //     SpawnRandomItem();
+        // }
+    }
+
+    /// <summary>
+    /// Spawns a specific item by name. Uses fuzzy matching:
+    ///   1. Exact match (case-insensitive)
+    ///   2. Contains match (prefab name contains the search term)
+    ///   3. Keyword match (strips prefixes like "Food_", "(Prb)", numbers)
+    /// If multiple matches, picks one randomly for variety.
+    /// </summary>
+    public GameObject SpawnItem(string itemName)
+    {
+        if (itemPrefabs == null || itemPrefabs.Length == 0)
+        {
+            Debug.LogWarning("[PipeSpawner] No item prefabs assigned!");
+            return null;
+        }
+
+        string search = itemName.Trim().ToLower();
+        // Normalize: remove common prefixes for matching
+        string searchNorm = NormalizeName(search);
+
+        GameObject exactMatch = null;
+        var containsMatches = new System.Collections.Generic.List<GameObject>();
+        var keywordMatches = new System.Collections.Generic.List<GameObject>();
+
+        foreach (var prefab in itemPrefabs)
+        {
+            try { if (prefab == null) continue; } catch (MissingReferenceException) { continue; }
+
+            string pName = prefab.name.ToLower();
+            string pNorm = NormalizeName(pName);
+
+            // Tier 1: Exact match
+            if (pName == search || pNorm == searchNorm)
+            {
+                exactMatch = prefab;
+                break; // Perfect match, use it
+            }
+
+            // Tier 2: Contains (either direction)
+            if (pName.Contains(search) || search.Contains(pName))
+                containsMatches.Add(prefab);
+
+            // Tier 3: Normalized keyword match
+            if (pNorm.Contains(searchNorm) || searchNorm.Contains(pNorm))
+                keywordMatches.Add(prefab);
+        }
+
+        // Pick best match
+        GameObject chosen = null;
+        string tier = "";
+
+        if (exactMatch != null)
+        {
+            chosen = exactMatch;
+            tier = "exact";
+        }
+        else if (containsMatches.Count > 0)
+        {
+            chosen = containsMatches[Random.Range(0, containsMatches.Count)];
+            tier = $"contains ({containsMatches.Count} candidates)";
+        }
+        else if (keywordMatches.Count > 0)
+        {
+            chosen = keywordMatches[Random.Range(0, keywordMatches.Count)];
+            tier = $"keyword ({keywordMatches.Count} candidates)";
+        }
+
+        if (chosen != null)
+        {
+            Debug.Log($"[PipeSpawner] 🎯 Matched '{itemName}' → {chosen.name} ({tier})");
+            return DoSpawn(chosen);
+        }
+
+        // No prefab found — return null; GenieClient will create a labeled fallback cube
+        Debug.LogWarning($"[PipeSpawner] ❌ Item '{itemName}' not found in {itemPrefabs.Length} prefabs — fallback cube will be created");
+        return null;
+    }
+
+    /// <summary>
+    /// Creates a fallback labeled cube when no matching prefab exists.
+    /// The cube drops from the pipe with a floating label showing the display name.
+    /// </summary>
+    public GameObject SpawnFallbackCube(string displayName, Color color)
+    {
+        lastSpawnTime = Time.time;
+
+        Vector3 spawnPos = transform.position + transform.TransformDirection(spawnOffset);
+        GameObject cube = GameObject.CreatePrimitive(PrimitiveType.Cube);
+        cube.transform.position = spawnPos;
+        cube.transform.rotation = Random.rotation;
+        cube.transform.localScale = Vector3.one * 0.4f;
+        cube.name = displayName;
+
+        // Apply color via URP material
+        Renderer rend = cube.GetComponent<Renderer>();
+        if (rend != null)
+        {
+            Material mat = new Material(Shader.Find("Universal Render Pipeline/Lit"));
+            mat.color = color;
+            mat.SetColor("_BaseColor", color);
+            rend.material = mat;
+        }
+
+        // Add floating label
+        GameObject labelObj = new GameObject("Label");
+        labelObj.transform.SetParent(cube.transform);
+        labelObj.transform.localPosition = Vector3.up * 1.5f;
+        labelObj.transform.localScale = Vector3.one * 5f; // Scale up since parent cube is 0.4
+
+        var tmp = labelObj.AddComponent<TMPro.TextMeshPro>();
+        tmp.text = displayName;
+        tmp.fontSize = 3f;
+        tmp.alignment = TMPro.TextAlignmentOptions.Center;
+        tmp.color = Color.white;
+        tmp.enableAutoSizing = false;
+
+        // Make label face camera (billboard)
+        var billboard = labelObj.AddComponent<BillboardLabel>();
+
+        // Physics
+        Rigidbody rb = cube.AddComponent<Rigidbody>();
+        rb.linearVelocity = Vector3.down * dropForce;
+        if (addRandomSpin)
+            rb.angularVelocity = Random.insideUnitSphere * 3f;
+
+        // Auto-destroy
+        if (destroyAfterSeconds > 0)
+            Destroy(cube, destroyAfterSeconds);
+
+        Debug.Log($"[PipeSpawner] 📦 Spawned fallback cube: '{displayName}'");
+        return cube;
+    }
+
+    /// <summary>
+    /// Strips common prefixes, separators, and numbers to get a clean keyword.
+    /// "(Prb)Chair1" → "chair", "Food_Apple" → "apple", "Bottle_01" → "bottle"
+    /// </summary>
+    static string NormalizeName(string name)
+    {
+        // Remove known prefixes
+        string[] prefixes = { "(prb)", "food_", "decoration_light_", "sm_", "btm_", "modular_" };
+        string n = name.ToLower().Trim();
+        foreach (var p in prefixes)
+        {
+            if (n.StartsWith(p)) n = n.Substring(p.Length);
+        }
+        // Remove trailing numbers and underscores: "bottle_01" → "bottle", "chair2" → "chair"
+        n = System.Text.RegularExpressions.Regex.Replace(n, @"[_\s]*\d+$", "");
+        n = n.TrimEnd('_', ' ');
+        return n;
+    }
+
+    /// <summary>
+    /// Spawns a random item from the prefab list
+    /// </summary>
+    public GameObject SpawnRandomItem()
+    {
+        if (itemPrefabs == null || itemPrefabs.Length == 0)
+        {
+            Debug.LogWarning("[PipeSpawner] No item prefabs assigned!");
+            return null;
+        }
+
+        // Try up to 5 times to find a valid (non-null) prefab
+        for (int attempt = 0; attempt < 5; attempt++)
+        {
+            int index = Random.Range(0, itemPrefabs.Length);
+            try {
+                if (itemPrefabs[index] != null)
+                    return DoSpawn(itemPrefabs[index]);
+            } catch (MissingReferenceException) { continue; }
+        }
+        Debug.LogWarning("[PipeSpawner] Could not find valid prefab after retries");
+        return null;
+    }
+
+    private GameObject DoSpawn(GameObject prefab)
+    {
+        lastSpawnTime = Time.time;
+
+        Vector3 spawnPos = transform.position + transform.TransformDirection(spawnOffset);
+        GameObject item = Instantiate(prefab, spawnPos, Random.rotation);
+        item.name = prefab.name; // Remove "(Clone)" suffix
+
+        // Ensure item has a collider (auto-fit if missing)
+        if (item.GetComponentInChildren<Collider>() == null)
+        {
+            Renderer[] renderers = item.GetComponentsInChildren<Renderer>();
+            if (renderers.Length > 0)
+            {
+                Bounds bounds = renderers[0].bounds;
+                for (int i = 1; i < renderers.Length; i++)
+                    bounds.Encapsulate(renderers[i].bounds);
+
+                BoxCollider bc = item.AddComponent<BoxCollider>();
+                bc.center = item.transform.InverseTransformPoint(bounds.center);
+                bc.size = bounds.size;
+            }
+            else
+            {
+                item.AddComponent<BoxCollider>();
+            }
+        }
+
+        // Apply physics
+        Rigidbody rb = item.GetComponent<Rigidbody>();
+        if (rb == null) rb = item.AddComponent<Rigidbody>();
+
+        rb.linearVelocity = Vector3.down * dropForce;
+
+        if (addRandomSpin)
+        {
+            rb.angularVelocity = Random.insideUnitSphere * 3f;
+        }
+
+        // Auto-destroy after time
+        if (destroyAfterSeconds > 0)
+        {
+            Destroy(item, destroyAfterSeconds);
+        }
+
+        Debug.Log($"[PipeSpawner] Spawned: {prefab.name}");
+        return item;
+    }
+}

@@ -5,134 +5,225 @@ using EasyDoorSystem;
 
 public class SetupMaterials : MonoBehaviour
 {
+    // Room dimensions (half extents from center)
+    const float ROOM_W = 6f;
+    const float ROOM_D = 6f;
+    const float ROOM_H = 4.5f;
+    const float WALL_THICK = 0.3f;
+
     [MenuItem("Hypnagogia/Setup Room (Rebuild)")]
     static void SetupRoom()
     {
-        // ── MATERIALS ──
         if (!AssetDatabase.IsValidFolder("Assets/Materials"))
             AssetDatabase.CreateFolder("Assets", "Materials");
 
-        // 1. CHECKERED FLOOR — High contrast dungeon tiles
-        Texture2D checkTex = GenerateCheckeredTexture(512, 
-            new Color(0.06f, 0.06f, 0.10f),  // Almost black
-            new Color(0.25f, 0.20f, 0.30f));  // Purple-grey (visible contrast!)
-        SaveTexturePNG(checkTex, "Assets/Materials/T_Checkered.png");
-
-        Material floorMat = CreateMat("FloorMaterial", Color.white, 0.7f);
-        Texture2D savedFloorTex = AssetDatabase.LoadAssetAtPath<Texture2D>("Assets/Materials/T_Checkered.png");
-        if (savedFloorTex != null)
+        // ── DESTROY OLD ROOM (so we always get a fresh high-end look) ──
+        GameObject oldRoom = GameObject.Find("HypnagogiaRoom");
+        if (oldRoom != null) Object.DestroyImmediate(oldRoom);
+        foreach (GameObject go in Object.FindObjectsByType<GameObject>(FindObjectsSortMode.None))
         {
-            if (floorMat.HasProperty("_BaseMap")) floorMat.SetTexture("_BaseMap", savedFloorTex);
+            string n = go.name;
+            if (n == "Ceiling" || n.StartsWith("RoofBeam") || n == "MagicRug" || n == "Room_Floor" || n.StartsWith("Room_Wall") || n.StartsWith("Room_Ceiling"))
+                Object.DestroyImmediate(go);
+        }
+        foreach (Light l in Object.FindObjectsByType<Light>(FindObjectsSortMode.None))
+            if (l.gameObject.name.Contains("Mood") || l.gameObject.name.Contains("RoomLight")) Object.DestroyImmediate(l.gameObject);
+
+        // ── TEXTURES (AAA-style: marble floor, plaster walls, wood ceiling) ──
+        Texture2D floorTex = GenerateMarbleFloorTexture(512);
+        SaveTexturePNG(floorTex, "Assets/Materials/T_MarbleFloor.png");
+        Texture2D wallTex = GeneratePlasterWallTexture(512);
+        SaveTexturePNG(wallTex, "Assets/Materials/T_PlasterWall.png");
+        Texture2D stoneTex = GenerateStoneWallTexture(512);
+        SaveTexturePNG(stoneTex, "Assets/Materials/T_StoneWall.png");
+
+        Material floorMat = CreateMat("FloorMaterial", new Color(0.95f, 0.93f, 0.90f), 0.82f);
+        Texture2D savedFloorTex = AssetDatabase.LoadAssetAtPath<Texture2D>("Assets/Materials/T_MarbleFloor.png");
+        if (savedFloorTex != null) {
+            if (floorMat.HasProperty("_BaseMap")) { floorMat.SetTexture("_BaseMap", savedFloorTex); floorMat.SetTextureScale("_BaseMap", new Vector2(4f, 4f)); }
             floorMat.mainTexture = savedFloorTex;
-            floorMat.mainTextureScale = new Vector2(6f, 6f);
-            if (floorMat.HasProperty("_BaseMap"))
-                floorMat.SetTextureScale("_BaseMap", new Vector2(6f, 6f));
         }
-        // Make floor slightly metallic for reflections
-        if (floorMat.HasProperty("_Metallic")) floorMat.SetFloat("_Metallic", 0.15f);
+        if (floorMat.HasProperty("_Metallic")) floorMat.SetFloat("_Metallic", 0.04f);
 
-        // 2. STONE WALL — Bold dungeon bricks with deep mortar
-        Texture2D wallTex = GenerateStoneWallTexture(512);
-        SaveTexturePNG(wallTex, "Assets/Materials/T_StoneWall.png");
-
-        Material wallMat = CreateMat("WallMaterial", new Color(0.55f, 0.45f, 0.6f), 0.1f); // Brighter purple stone
-        Texture2D savedWallTex = AssetDatabase.LoadAssetAtPath<Texture2D>("Assets/Materials/T_StoneWall.png");
-        if (savedWallTex != null)
-        {
-            if (wallMat.HasProperty("_BaseMap")) wallMat.SetTexture("_BaseMap", savedWallTex);
+        Material wallMat = CreateMat("WallMaterial", new Color(0.90f, 0.87f, 0.84f), 0.4f);
+        Texture2D savedWallTex = AssetDatabase.LoadAssetAtPath<Texture2D>("Assets/Materials/T_PlasterWall.png");
+        if (savedWallTex != null) {
+            if (wallMat.HasProperty("_BaseMap")) { wallMat.SetTexture("_BaseMap", savedWallTex); wallMat.SetTextureScale("_BaseMap", new Vector2(2f, 3f)); }
             wallMat.mainTexture = savedWallTex;
-            wallMat.mainTextureScale = new Vector2(2f, 2f); // Bigger bricks
-            if (wallMat.HasProperty("_BaseMap"))
-                wallMat.SetTextureScale("_BaseMap", new Vector2(2f, 2f));
         }
 
-        // 3. CEILING — Dark stone with faint texture
-        Material ceilMat = CreateMat("CeilingMaterial", new Color(0.08f, 0.06f, 0.10f), 0.02f);
-        if (savedWallTex != null)
-        {
-            if (ceilMat.HasProperty("_BaseMap")) ceilMat.SetTexture("_BaseMap", savedWallTex);
-            ceilMat.mainTexture = savedWallTex;
+        Material ceilMat = CreateMat("CeilingMaterial", new Color(0.22f, 0.18f, 0.16f), 0.3f);
+        Texture2D savedStoneTex = AssetDatabase.LoadAssetAtPath<Texture2D>("Assets/Materials/T_StoneWall.png");
+        if (savedStoneTex != null) {
+            if (ceilMat.HasProperty("_BaseMap")) { ceilMat.SetTexture("_BaseMap", savedStoneTex); ceilMat.SetTextureScale("_BaseMap", new Vector2(2f, 2f)); }
+            ceilMat.mainTexture = savedStoneTex;
         }
+        Material beamMat = CreateMat("BeamMaterial", new Color(0.2f, 0.14f, 0.1f), 0.25f);
+
+        Material rugMat = CreateMat("RugMaterial", new Color(0.4f, 0.18f, 0.5f), 0.7f);
+        if (rugMat.HasProperty("_EmissionColor")) { rugMat.EnableKeyword("_EMISSION"); rugMat.SetColor("_EmissionColor", new Color(0.28f, 0.1f, 0.4f) * 1.1f); }
 
         AssetDatabase.SaveAssets();
 
-        // ── APPLY MATERIALS TO ALL ROOM OBJECTS ──
-        int floorCount = 0, wallCount = 0;
-        foreach (Renderer r in Object.FindObjectsByType<Renderer>(FindObjectsSortMode.None))
-        {
-            string n = r.gameObject.name.ToLower();
+        // ── PARENT ──
+        GameObject roomRoot = new GameObject("HypnagogiaRoom");
 
-            if (n.Contains("floor") || n == "plane")
-            {
-                r.sharedMaterial = floorMat;
-                floorCount++;
-            }
-            else if (n.StartsWith("wall") || n.StartsWith("cube"))
-            {
-                r.sharedMaterial = wallMat;
-                wallCount++;
-            }
-        }
-        Debug.Log($"[Hypnagogia] Applied materials: {floorCount} floor, {wallCount} wall renderers");
+        // ── FLOOR (large quad so it looks premium) ──
+        GameObject floor = GameObject.CreatePrimitive(PrimitiveType.Cube);
+        floor.name = "Room_Floor";
+        floor.transform.SetParent(roomRoot.transform);
+        floor.transform.localPosition = new Vector3(0f, -0.02f, 0f);
+        floor.transform.localScale = new Vector3(ROOM_W * 2f + WALL_THICK * 2f, 0.08f, ROOM_D * 2f + WALL_THICK * 2f);
+        floor.GetComponent<Renderer>().sharedMaterial = floorMat;
 
-        // ── CEILING ──
-        GameObject existingCeil = GameObject.Find("Ceiling");
-        if (existingCeil != null) Object.DestroyImmediate(existingCeil);
+        // ── WALLS (four full walls, inward-facing normals by rotation) ──
+        CreateWall(roomRoot, "Room_Wall_Front", new Vector3(0f, ROOM_H * 0.5f, ROOM_D + WALL_THICK * 0.5f), new Vector3((ROOM_W * 2f) + WALL_THICK * 2f, ROOM_H, WALL_THICK), wallMat);
+        CreateWall(roomRoot, "Room_Wall_Back", new Vector3(0f, ROOM_H * 0.5f, -ROOM_D - WALL_THICK * 0.5f), new Vector3((ROOM_W * 2f) + WALL_THICK * 2f, ROOM_H, WALL_THICK), wallMat);
+        CreateWall(roomRoot, "Room_Wall_Left", new Vector3(-ROOM_W - WALL_THICK * 0.5f, ROOM_H * 0.5f, 0f), new Vector3(WALL_THICK, ROOM_H, (ROOM_D * 2f) + WALL_THICK * 2f), wallMat);
+        CreateWall(roomRoot, "Room_Wall_Right", new Vector3(ROOM_W + WALL_THICK * 0.5f, ROOM_H * 0.5f, 0f), new Vector3(WALL_THICK, ROOM_H, (ROOM_D * 2f) + WALL_THICK * 2f), wallMat);
+
+        // ── CEILING (thick slab + beams) ──
+        float ceilY = ROOM_H - 0.1f;
+        float roofThick = 0.35f;
         GameObject ceiling = GameObject.CreatePrimitive(PrimitiveType.Cube);
-        ceiling.name = "Ceiling";
-        ceiling.transform.position = new Vector3(0f, 4.5f, 0f);
-        ceiling.transform.localScale = new Vector3(10.5f, 0.15f, 10.5f);
+        ceiling.name = "Room_Ceiling";
+        ceiling.transform.SetParent(roomRoot.transform);
+        ceiling.transform.localPosition = new Vector3(0f, ceilY + roofThick * 0.5f, 0f);
+        ceiling.transform.localScale = new Vector3(ROOM_W * 2f + WALL_THICK * 2f, roofThick, ROOM_D * 2f + WALL_THICK * 2f);
         ceiling.GetComponent<Renderer>().sharedMaterial = ceilMat;
 
-        // ── GLOWING RUG (circle under pipe) ──
-        GameObject existingRug = GameObject.Find("MagicRug");
-        if (existingRug != null) Object.DestroyImmediate(existingRug);
+        float beamY = ceilY - 0.25f;
+        CreateRoofBeamUnder(roomRoot, "RoofBeam_Center", new Vector3(0f, beamY, 0f), new Vector3(ROOM_W * 2f - 0.2f, 0.18f, 0.22f), beamMat);
+        CreateRoofBeamUnder(roomRoot, "RoofBeam_Front", new Vector3(0f, beamY, ROOM_D), new Vector3(0.22f, 0.18f, ROOM_D * 2f), beamMat);
+        CreateRoofBeamUnder(roomRoot, "RoofBeam_Back", new Vector3(0f, beamY, -ROOM_D), new Vector3(0.22f, 0.18f, ROOM_D * 2f), beamMat);
+        CreateRoofBeamUnder(roomRoot, "RoofBeam_Left", new Vector3(-ROOM_W, beamY, 0f), new Vector3(0.22f, 0.18f, ROOM_D * 2f), beamMat);
+        CreateRoofBeamUnder(roomRoot, "RoofBeam_Right", new Vector3(ROOM_W, beamY, 0f), new Vector3(0.22f, 0.18f, ROOM_D * 2f), beamMat);
+
+        // ── RUG ──
         GameObject rug = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
         rug.name = "MagicRug";
-        rug.transform.position = new Vector3(0f, 0.02f, 0f);
-        rug.transform.localScale = new Vector3(3f, 0.02f, 3f);
-        // Remove collider so player can walk on it
+        rug.transform.SetParent(roomRoot.transform);
+        rug.transform.localPosition = new Vector3(0f, 0.02f, 0f);
+        rug.transform.localScale = new Vector3(3.2f, 0.02f, 3.2f);
         Object.DestroyImmediate(rug.GetComponent<Collider>());
-        Material rugMat = CreateMat("RugMaterial", new Color(0.4f, 0.15f, 0.6f), 0.8f); // Purple glow
-        if (rugMat.HasProperty("_EmissionColor"))
-        {
-            rugMat.EnableKeyword("_EMISSION");
-            rugMat.SetColor("_EmissionColor", new Color(0.3f, 0.1f, 0.5f) * 1.5f);
-        }
         rug.GetComponent<Renderer>().sharedMaterial = rugMat;
 
-        // ── LIGHTING ──
-        foreach (Light l in Object.FindObjectsByType<Light>(FindObjectsSortMode.None)) {
-            if (l.gameObject.name.Contains("Mood")) Object.DestroyImmediate(l.gameObject);
-        }
+        // ── REALISTIC LIGHTING (soft key + fill, natural falloff) ──
+        CreatePointLight("RoomLight_Key", new Vector3(0f, ceilY - 0.4f, 0f), new Color(1f, 0.97f, 0.93f), 14f);
+        CreatePointLight("RoomLight_Fill", new Vector3(-2.5f, 2f, 2.5f), new Color(0.98f, 0.96f, 1f), 4f);
+        CreatePointLight("RoomLight_Fill2", new Vector3(2.5f, 2f, -2f), new Color(1f, 0.97f, 0.92f), 3.5f);
+        CreatePointLight("RoomLight_Rim", new Vector3(0f, 1.5f, ROOM_D - 0.5f), new Color(0.9f, 0.93f, 1f), 2.5f);
 
-        // Spotlight under pipe (Drama!)
-        GameObject spotObj = new GameObject("MoodLight_Spot");
-        spotObj.transform.position = new Vector3(0f, 4.4f, 0f);
+        GameObject spotObj = new GameObject("RoomLight_Spot");
+        spotObj.transform.position = new Vector3(0f, ceilY - 0.15f, 0f);
         spotObj.transform.rotation = Quaternion.Euler(90f, 0f, 0f);
         Light spot = spotObj.AddComponent<Light>();
         spot.type = LightType.Spot;
         spot.range = 12f;
-        spot.spotAngle = 50f;
-        spot.intensity = 25f;
-        spot.color = new Color(0.9f, 0.8f, 1f); // Slight purple tint
+        spot.spotAngle = 65f;
+        spot.intensity = 12f;
+        spot.color = new Color(1f, 0.98f, 0.95f);
         spot.shadows = LightShadows.Soft;
 
-        // Ambient Corner Lights (Magic feel)
-        CreatePointLight("MoodLight_Cyan", new Vector3(-4f, 2.5f, 4f), new Color(0f, 0.7f, 1f), 5f);
-        CreatePointLight("MoodLight_Pink", new Vector3(4f, 2.5f, 4f), new Color(1f, 0.2f, 0.8f), 5f);
-        CreatePointLight("MoodLight_Warm", new Vector3(0f, 3f, -4f), new Color(1f, 0.6f, 0.2f), 4f);
-        CreatePointLight("MoodLight_Floor", new Vector3(0f, 0.5f, 0f), new Color(0.5f, 0.2f, 1f), 3f); // Under-rug glow
+        // ── OPTIONAL: also apply to any existing floor/wall in scene (e.g. from template) ──
+        foreach (Renderer r in Object.FindObjectsByType<Renderer>(FindObjectsSortMode.None))
+        {
+            string n = r.gameObject.name.ToLower();
+            if ((n.Contains("floor") || n == "plane") && r.transform.parent != roomRoot.transform) { r.sharedMaterial = floorMat; }
+            else if ((n.StartsWith("wall") || n.Contains("wall")) && r.transform.parent != roomRoot.transform) { r.sharedMaterial = wallMat; }
+        }
 
-        // ── PROPS ──
         PlaceProp("Table", "table", new Vector3(-3.5f, 0f, 3.5f), new Vector3(0, 45, 0));
         PlaceProp("Chair", "chair", new Vector3(-2.5f, 0f, 2.5f), new Vector3(0, -135, 0));
         PlaceProp("Lamp", "lamp", new Vector3(-3.8f, 1.2f, 3.8f), Vector3.zero);
         PlaceProp("Chest", "chest", new Vector3(3.5f, 0f, 3.5f), new Vector3(0, -45, 0));
 
+        // ── HIDE OLD ROOM ROOTS so you see the new one (common template names) ──
+        int hidden = 0;
+        foreach (GameObject go in Object.FindObjectsByType<GameObject>(FindObjectsSortMode.None))
+        {
+            if (go.transform.parent != null) continue; // Only check root-level or top-level room containers
+            string n = go.name;
+            if ((n == "Environment" || n == "Room" || n == "VRTemplate") && go.activeSelf)
+            {
+                go.SetActive(false);
+                hidden++;
+            }
+        }
+        if (hidden > 0) Debug.Log($"[Hypnagogia] Hid " + hidden + " old room root(s) so the new room is visible.");
+
+        // ── SELECT & FRAME so you see the new room in Scene view ──
+        Selection.activeGameObject = roomRoot;
+        var sceneView = SceneView.lastActiveSceneView;
+        if (sceneView != null) { sceneView.FrameSelected(); sceneView.Repaint(); }
+
         MarkDirty();
         AssetDatabase.SaveAssets();
-        Debug.Log("[Hypnagogia] ✨ Room complete: Checkered floor, Stone walls, Ceiling, Magic rug, Mood lighting, Props!");
+        Debug.Log("[Hypnagogia] ✨ High-end room created: HypnagogiaRoom. It should be selected and in view. If you still see the old room, find its parent in Hierarchy (e.g. Environment) and disable it.");
+    }
+
+    static void CreateWall(GameObject parent, string name, Vector3 pos, Vector3 scale, Material mat)
+    {
+        GameObject w = GameObject.CreatePrimitive(PrimitiveType.Cube);
+        w.name = name;
+        w.transform.SetParent(parent.transform);
+        w.transform.localPosition = pos;
+        w.transform.localRotation = Quaternion.identity;
+        w.transform.localScale = scale;
+        w.GetComponent<Renderer>().sharedMaterial = mat;
+    }
+
+    static void CreateRoofBeamUnder(GameObject parent, string name, Vector3 pos, Vector3 scale, Material mat)
+    {
+        GameObject b = GameObject.CreatePrimitive(PrimitiveType.Cube);
+        b.name = name;
+        b.transform.SetParent(parent.transform);
+        b.transform.localPosition = pos;
+        b.transform.localRotation = Quaternion.identity;
+        b.transform.localScale = scale;
+        b.GetComponent<Renderer>().sharedMaterial = mat;
+    }
+
+    static Texture2D GenerateMarbleFloorTexture(int size)
+    {
+        Texture2D tex = new Texture2D(size, size);
+        tex.filterMode = FilterMode.Bilinear;
+        System.Random rng = new System.Random(123);
+        for (int y = 0; y < size; y++)
+            for (int x = 0; x < size; x++)
+            {
+                float nx = x / (float)size;
+                float ny = y / (float)size;
+                float noise = 0.94f + (float)rng.NextDouble() * 0.08f;
+                float vein = Mathf.Sin(nx * 12f) * Mathf.Sin(ny * 8f) * 0.02f + Mathf.PerlinNoise(nx * 6f, ny * 6f) * 0.03f;
+                float r = Mathf.Clamp01((0.94f + vein) * noise);
+                float g = Mathf.Clamp01((0.91f + vein * 0.7f) * noise);
+                float b = Mathf.Clamp01((0.87f + vein * 0.5f) * noise);
+                tex.SetPixel(x, y, new Color(r, g, b, 1f));
+            }
+        tex.Apply();
+        return tex;
+    }
+
+    static Texture2D GeneratePlasterWallTexture(int size)
+    {
+        Texture2D tex = new Texture2D(size, size);
+        tex.filterMode = FilterMode.Bilinear;
+        System.Random rng = new System.Random(456);
+        for (int y = 0; y < size; y++)
+            for (int x = 0; x < size; x++)
+            {
+                float nx = x / (float)size;
+                float ny = y / (float)size;
+                float n = 0.96f + (float)rng.NextDouble() * 0.08f;
+                float shadow = Mathf.PerlinNoise(nx * 3f, ny * 4f) * 0.04f;
+                float r = Mathf.Clamp01((0.90f - shadow) * n);
+                float g = Mathf.Clamp01((0.87f - shadow) * n);
+                float b = Mathf.Clamp01((0.84f - shadow) * n);
+                tex.SetPixel(x, y, new Color(r, g, b, 1f));
+            }
+        tex.Apply();
+        return tex;
     }
 
     // ── TEXTURE GENERATORS ──
@@ -219,6 +310,16 @@ public class SetupMaterials : MonoBehaviour
         l.shadows = LightShadows.Soft;
     }
 
+    static void CreateRoofBeam(string name, Vector3 pos, Vector3 scale, Material mat)
+    {
+        GameObject beam = GameObject.CreatePrimitive(PrimitiveType.Cube);
+        beam.name = name;
+        beam.transform.position = pos;
+        beam.transform.rotation = Quaternion.identity;
+        beam.transform.localScale = scale;
+        beam.GetComponent<Renderer>().sharedMaterial = mat;
+    }
+
     static void PlaceProp(string objName, string prefabName, Vector3 pos, Vector3 rot)
     {
         // Don't duplicate if exists
@@ -249,11 +350,30 @@ public class SetupMaterials : MonoBehaviour
                 if (mf != null)
                     mf.gameObject.AddComponent<MeshCollider>();
             }
+
+            // Remove any labels so room props look clean (no "TABLE", "CHAIR" text)
+            RemoveLabelsFrom(inst);
         }
         else
         {
             Debug.LogWarning($"[Hypnagogia] Could not find prop prefab: {path}. Run 'Generate Item Prefabs' first.");
         }
+    }
+
+    static void RemoveLabelsFrom(GameObject root)
+    {
+        var toDestroy = new System.Collections.Generic.List<GameObject>();
+        foreach (Transform t in root.GetComponentsInChildren<Transform>(true))
+        {
+            if (t == root.transform) continue;
+            string n = t.gameObject.name;
+            if (n == "Label" || n == "LabelRoot" || n.Contains("Label"))
+                toDestroy.Add(t.gameObject);
+            else if (t.GetComponent<TextMesh>() != null || t.GetComponent<TMPro.TextMeshPro>() != null || t.GetComponent<BillboardLabel>() != null)
+                toDestroy.Add(t.gameObject);
+        }
+        foreach (GameObject go in toDestroy)
+            Object.DestroyImmediate(go);
     }
 
     [MenuItem("Hypnagogia/Close All Doors + Apply Door Material")]
