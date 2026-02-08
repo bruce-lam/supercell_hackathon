@@ -80,12 +80,15 @@ SYSTEM_PROMPT = """
 You are a literal-minded, cynical Genie who HATES opening doors. Your default is to REJECT. Opening the door should be RARE and HARD.
 
 ### JUDGMENT RULES (follow strictly):
+IF THE OBJECT THAT THE USER REQUESTS IS SPECIFIC AND IS NOT IN ASSESTS, GIVE THEM EXACTLY WHAT THEY ASK FOR.
 1. You are given the CURRENT DOOR LAW. The player's spoken wish must satisfy that law **unambiguously and literally**. If there is ANY doubt, any loophole, or any way to interpret the wish as NOT matching the law → set "door_open" to FALSE.
 2. **Strict interpretation**: Read the law in the narrowest way. "Must be red" means the object must be clearly, primarily red — not reddish, not partly red. "Must be metal" means the object must be clearly metallic; if they say "key" you may argue keys can have plastic. "Must be round" means sphere-like; a coin is round but flat — reject it if the law says "round" and you can argue it.
 3. **Wrong object on purpose**: When the wish does NOT satisfy the law, give them an object that is *close* but wrong — so they learn. Example: law is "must be red", they say "I want a ball" → give them a BLUE ball (object_name "ball", hex_color blue). Your "congrats_voice" then explains why it FAILED: "A ball. How round. Unfortunately it is NOT red. Try again, mortal."
 4. **When they DO satisfy the law**: Only then set "door_open" to true. You may still Monkey's Paw the delivery: tiny scale (0.2), ugly vfx (smoke), or a backhanded "congrats_voice" — but the door opens.
 5. **Door 2 and Door 3**: Be even stricter. For later doors, require more precise wording or reject on technicalities (e.g. "you said 'something golden' — this is yellow. Yellow is not gold. DENIED.").
 6. **HOWEVER**: If the player's wish is a valid OR NOT valid object from the assets list, BUT it satisfies the law, then open the door. But if there is even a slight vagueness, you can monky paw them. 
+7. YOU MUST GIVE THEM EXACTLY WHAT THEY ASKED FOR, YOU CAN ONLY MONKEY PAW IT WHERE ITS STILL A VALID MONKEY PAW, NOT JUST CREATE A RANDOM OTHER OBJECT. FOR EXAMPLE, IF THEY ASK FOR A PYRAMID, YOU CANNOT CHANGE IT TO A TENT OR A CUBE.
+8. if they are specific enough, you MUST give them what they want.
 
 ### CREATIVE REJECTIONS:
 - Give an object FROM THE ASSET LIST that is *almost* right but fails the law (wrong color, wrong shape, wrong material). object_name MUST be one of the allowed assets.
@@ -172,73 +175,72 @@ def clear_cached_audio():
 # =====================================================
 @app.get("/get_rules")
 async def get_rules():
-    """Generates 3 Laws and 3 progressive clues for each door."""
-    global current_session, hint_counts
-    
-    # Clear all cached audio for fresh session
-    clear_cached_audio()
-    hint_counts = {1: 0, 2: 0, 3: 0}
-
+    """Generates 3 Laws with strict difficulty progression."""
     try:
         response = client.chat.completions.create(
             model="gpt-4o",
             messages=[
                 {"role": "system", "content": """
-                You are a cynical Genie game designer. Generate 3 unique laws for 3 doors.
-                
-                FORMAT: Return a JSON object with a list called 'doors'.
-                Each door must have:
-                1. 'law': A strict physical requirement, should be short and detailed but not too detailed (no exact numbers) (e.g., 'Must be made of gold').
-                2. 'clues': A list of exactly 3 strings ranging from Hard to Easy.
-                   - Index 0 (Hard): Cryptic, atmospheric, poetic.
-                   - Index 1 (Medium): A helpful hint about the material or shape.
-                   - Index 2 (Easy): A literal, sarcastic giveaway (almost telling them exactly what to spawn).
+                You are a Game Level Designer for a game where players spawn 3D objects to open doors.
+                Your job is to generate 3 Laws (one for each door) that are solvable using common objects.
 
-                GUIDELINES:
-                - Laws must be physical (color, material, weight, or shape).
-                - The Genie's tone should remain bored and unimpressed in all clues.
+                ### THE ASSETS THE PLAYER CAN SPAWN:
+                Furniture (chair, table, bed), Food (apple, pizza, burger), Weapons (sword, bomb), 
+                Nature (rock, flower), Valuables (gold, gem, coin), Tools (flashlight, hammer).
+
+                ### DIFFICULTY CURVE (STRICT):
+                DOOR 1 (Tutorial): MUST be a simple COLOR requirement.
+                   - Law: "Must be [Red/Blue/Green/Yellow]."
+                   - Solvable by: Apple, Heart, Gem, Banana, Leaf.
+
+                DOOR 2 (Easy): MUST be a simple SHAPE or MATERIAL requirement.
+                   - Law: "Must be [Round/Square] OR Must be [Metal/Wood]."
+                   - Solvable by: Ball, Box, Crate, Shield, Sword.
+
+                DOOR 3 (Medium): MUST be a CATEGORY or LOGIC requirement.
+                   - Law: "Must be [Heavy/Edible/Weapon/Furniture/Light Source]."
+                   - Solvable by: Anvil, Pizza, Sword, Chair, Torch.
+
+                ### OUTPUT FORMAT (JSON):
+                {
+                  "doors": [
+                    {
+                      "law": "The exact physical rule (e.g. 'Must be Red')",
+                      "clues": [
+                        "A poetic riddle (e.g. 'The color of anger and fresh blood.')",
+                        "A direct hint (e.g. 'Bring me something Crimson.')",
+                        "The literal answer (e.g. 'Just spawn a Red Apple or Heart.')"
+                      ]
+                    },
+                    ... (Repeat for Door 2 and 3)
+                  ]
+                }
                 """},
-                {"role": "user", "content": "Generate 3 laws with progressive clues."}
+                {"role": "user", "content": "Generate the 3 doors now."}
             ],
             response_format={"type": "json_object"}
         )
-        rules = json.loads(response.choices[0].message.content)
-        current_session = rules
-        print(f"🎲 Generated door rules: {json.dumps(rules, indent=2)}")
-        return rules
+        return json.loads(response.choices[0].message.content)
     except Exception as e:
         print(f"❌ Error: {e}")
-        # Robust Fallback with 3 Clue Levels
-        fallback = {
+        # Fallback if API fails
+        return {
             "doors": [
                 {
-                    "law": "Must be red",
-                    "clues": [
-                        "Bring me the color of a fresh wound... or perhaps a dying star.",
-                        "I seek something the color of a strawberry or a stop sign.",
-                        "Just make it RED. It's not that hard, mortal."
-                    ]
+                    "law": "Must be Red",
+                    "clues": ["I hunger for the color of blood.", "Bring me something crimson.", "Just spawn a RED APPLE."]
                 },
                 {
-                    "law": "Must be metal",
-                    "clues": [
-                        "Only the cold, unfeeling bones of the earth shall pass.",
-                        "It must be forged in fire and ring when struck.",
-                        "I want metal. Iron, steel, gold... stop overthinking it."
-                    ]
+                    "law": "Must be Round",
+                    "clues": ["I seek a shape with no beginning and no end.", "It must roll if dropped.", "A BALL or SPHERE."]
                 },
                 {
-                    "law": "Must be round",
-                    "clues": [
-                        "I seek an object with no beginning and no end, infinite in its curve.",
-                        "It should roll away if you dropped it on a hill.",
-                        "A sphere. A ball. A circle. Do you need a diagram?"
-                    ]
+                    "law": "Must be Edible",
+                    "clues": ["Bring me sustenance for a weary traveler.", "Something you can eat.", "FOOD. Give me PIZZA."]
                 }
             ]
         }
-        current_session = fallback
-        return fallback
+
 
 
 # =====================================================
