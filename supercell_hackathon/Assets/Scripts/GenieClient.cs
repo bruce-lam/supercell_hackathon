@@ -40,6 +40,11 @@ public class GenieClient : MonoBehaviour
     [Tooltip("Loaded automatically from Assets/Audio/door_creak_open")]
     public AudioClip doorOpenSFX;
 
+    [Header("Answer SFX")]
+    [Tooltip("Played when the wish is correct/incorrect. Auto-loaded from Assets/Audio/")]
+    public AudioClip successSFX;
+    public AudioClip failSFX;
+
     [Header("Recording")]
     public int recordingLengthSec = 10;
     public int sampleRate = 44100;
@@ -109,9 +114,13 @@ public class GenieClient : MonoBehaviour
         // Fetch door rules from backend
         StartCoroutine(FetchDoorRules());
 
-        // Auto-load door SFX if not assigned
+        // Auto-load SFX if not assigned
         if (doorOpenSFX == null)
             doorOpenSFX = Resources.Load<AudioClip>("door_creak_open");
+        if (successSFX == null)
+            successSFX = Resources.Load<AudioClip>("success_chime");
+        if (failSFX == null)
+            failSFX = Resources.Load<AudioClip>("fail_buzzer");
     }
 
     // =====================================================
@@ -266,24 +275,35 @@ public class GenieClient : MonoBehaviour
             PipeSpawner pipeSpawner = ActivePipeSpawner;
             if (pipeSpawner != null && !string.IsNullOrEmpty(response.object_name))
             {
+                // Parse hex color first (needed for both prefab and fallback)
+                Color genieColor = Color.white;
+                if (!string.IsNullOrEmpty(response.hex_color))
+                    ColorUtility.TryParseHtmlString(response.hex_color, out genieColor);
+
+                // Try to spawn from prefab library
                 GameObject spawned = pipeSpawner.SpawnItem(response.object_name);
+
+                // Fallback: create a labeled cube if no matching prefab
+                if (spawned == null)
+                {
+                    string label = !string.IsNullOrEmpty(response.display_name)
+                        ? response.display_name
+                        : response.object_name;
+                    spawned = pipeSpawner.SpawnFallbackCube(label, genieColor);
+                }
 
                 if (spawned != null)
                 {
-                    // Apply hex color from Genie
+                    // Apply hex color from Genie (only for real prefabs; fallback already has it)
                     if (!string.IsNullOrEmpty(response.hex_color))
                     {
-                        Color genieColor;
-                        if (ColorUtility.TryParseHtmlString(response.hex_color, out genieColor))
+                        Renderer rend = spawned.GetComponent<Renderer>();
+                        if (rend != null && rend.sharedMaterial != null)
                         {
-                            Renderer rend = spawned.GetComponent<Renderer>();
-                            if (rend != null)
-                            {
-                                Material mat = new Material(rend.sharedMaterial);
-                                mat.color = genieColor;
-                                mat.SetColor("_BaseColor", genieColor);
-                                rend.material = mat;
-                            }
+                            Material mat = new Material(rend.sharedMaterial);
+                            mat.color = genieColor;
+                            mat.SetColor("_BaseColor", genieColor);
+                            rend.material = mat;
                         }
                     }
 
@@ -295,6 +315,13 @@ public class GenieClient : MonoBehaviour
 
                     // Apply VFX from Genie
                     AttachVFX(spawned, response.vfx_type);
+
+                    // Add floating label with display_name (if not already a fallback cube with label)
+                    if (!string.IsNullOrEmpty(response.display_name)
+                        && spawned.GetComponentInChildren<TMPro.TextMeshPro>() == null)
+                    {
+                        AddFloatingLabel(spawned, response.display_name);
+                    }
                 }
             }
 
@@ -310,6 +337,29 @@ public class GenieClient : MonoBehaviour
             {
                 StartCoroutine(OpenDoorAfterDelay(response));
             }
+            else
+            {
+                // Wrong answer — play fail buzzer after drop voice finishes
+                StartCoroutine(PlayFailAfterDelay(response));
+            }
+        }
+    }
+
+    IEnumerator PlayFailAfterDelay(GenieResponse response)
+    {
+        // Wait for drop voice to finish
+        yield return new WaitForSeconds(4f);
+
+        // Play fail buzzer
+        if (failSFX != null && genieAudioSource != null)
+            genieAudioSource.PlayOneShot(failSFX, 0.7f);
+
+        // Play congrats voice (which is actually the rejection speech)
+        if (!string.IsNullOrEmpty(response.audio_url_congrats))
+        {
+            ShowSubtitle(response.congrats_voice);
+            yield return new WaitForSeconds(0.5f);
+            StartCoroutine(PlayAudioFromUrl(serverUrl + response.audio_url_congrats));
         }
     }
 
@@ -318,10 +368,15 @@ public class GenieClient : MonoBehaviour
         // Wait for drop voice to finish, then play congrats
         yield return new WaitForSeconds(4f);
 
+        // Play success chime
+        if (successSFX != null && genieAudioSource != null)
+            genieAudioSource.PlayOneShot(successSFX, 0.8f);
+
         // Play congrats voice with subtitle
         if (!string.IsNullOrEmpty(response.audio_url_congrats))
         {
             ShowSubtitle(response.congrats_voice);
+            yield return new WaitForSeconds(0.5f);
             StartCoroutine(PlayAudioFromUrl(serverUrl + response.audio_url_congrats));
         }
 
@@ -497,6 +552,30 @@ public class GenieClient : MonoBehaviour
             subtitleText.alpha = 0f;
             subtitleText.text = "";
         }
+    }
+    // --- FLOATING LABELS ---
+    void AddFloatingLabel(GameObject target, string displayName)
+    {
+        GameObject labelObj = new GameObject("Label");
+        labelObj.transform.SetParent(target.transform);
+
+        // Position above the object based on its bounds
+        Renderer rend = target.GetComponentInChildren<Renderer>();
+        float height = 1.0f;
+        if (rend != null)
+            height = rend.bounds.size.y + 0.3f;
+        labelObj.transform.localPosition = Vector3.up * height;
+
+        var tmp = labelObj.AddComponent<TMPro.TextMeshPro>();
+        tmp.text = displayName;
+        tmp.fontSize = 2.5f;
+        tmp.alignment = TMPro.TextAlignmentOptions.Center;
+        tmp.color = Color.white;
+        tmp.enableAutoSizing = false;
+        tmp.rectTransform.sizeDelta = new Vector2(3f, 1f);
+
+        // Billboard effect
+        labelObj.AddComponent<BillboardLabel>();
     }
 
     // --- VFX ---
