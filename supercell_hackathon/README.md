@@ -75,7 +75,7 @@ Then open `http://localhost:3000/wakeup` when prompted, or it will open automati
 - 📦 Watch the object tumble from the pipe
 - 🗣️ Listen to the Genie roast you
 - 🚪 Walk to the door — if the Genie approves, it swings open with a creak
-- 🌅 **After door 3** — Your browser opens the Reactor wakeup scene; explore an AI-generated bedroom with WASD
+- 🌅 **After door 3** — Your browser opens the Reactor wakeup scene; explore an AI-generated bedroom
 
 ---
 
@@ -88,7 +88,7 @@ You're trapped in a mystical room with **three locked doors**, each governed by 
 3. **📦 An object drops from the pipe** — One of 449 3D models tumbles out with full physics
 4. **🗣️ The Genie voices its verdict** — ElevenLabs synthesizes sarcastic dialogue in real-time
 5. **🚪 The door opens... or doesn't** — If your logic satisfied the law, you escape. If not, the Genie gloats.
-6. **🌅 Reactor wakeup scene** — After passing door 3, your browser opens an explorable AI world (Reactor WorldCore) — a cozy bedroom you can move through with WASD.
+6. **🌅 Reactor wakeup scene** — After passing door 3, your browser opens an explorable AI world (Reactor WorldCore) — a cozy bedroom you can move through.
 
 The Genie is a *Monkey's Paw* — it deliberately misinterprets wishes. Ask for "something red" and it might drop a red fish. Ask for "a weapon" and it might give you a rubber duck. You must be precise.
 
@@ -163,7 +163,7 @@ Player speaks → [Whisper STT] → text
                     ↓                           ↓
               Audio plays ←──── Player interacts with door
                     ↓
-         All 3 doors opened? ──→ Browser opens Reactor wakeup scene
+         All 3 doors opened? ──→ Reactor wakeup scene
 ```
 
 ### In Development: AI-Assisted Game Building
@@ -229,7 +229,6 @@ With minor additions (audio-based spatial cues for navigation), this game could 
 │                                     │
 │  Reactor WorldCore → Wakeup scene   │
 │  /wakeup → explorable AI bedroom    │
-│  WASD + IJKL controls               │
 └─────────────────────────────────────┘
 ```
 
@@ -244,7 +243,7 @@ With minor additions (audio-based spatial cues for navigation), this game could 
 - **Background music** with automatic ducking when the Genie speaks
 - **Sound effects** — wooden door creak on open, generated via ElevenLabs SFX API
 - **Dynamic subtitles** — duration scales with text length, stays visible during audio
-- **Reactor wakeup scene** — After door 3, explore an AI-generated bedroom via Reactor WorldCore in the browser
+- **Reactor wakeup scene** — After door 3, explore an AI-generated bedroom via Reactor WorldCore
 
 ---
 
@@ -282,7 +281,7 @@ supercell_hackathon/
 
 ## 👥 Team
 
-Built at the **Supercell Hackathon 2025** 🏆
+Built at the **Supercell Hackathon 2026** 🏆
 
 ---
 
