@@ -1,1 +1,28 @@
 .env
+
+# Unity build output (IL2CPP, Android, etc.)
+*_BackUpThisFolder_ButDontShipItWithYourGame/
+.utmp/
+Builds/
+Build/
+*.apk
+*.aab
+*_BurstDebugInformation_DoNotShip/
+
+# Unity generated
+Library/
+Temp/
+Obj/
+Logs/
+UserSettings/
+MemoryCaptures/
+*.csproj
+*.sln
+*.suo
+*.user
+*.pidb
+*.booproj
+
+# OS files
+.DS_Store
+Thumbs.db

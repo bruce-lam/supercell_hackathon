@@ -37,7 +37,7 @@ app.add_middleware(
 # --- CLIENTS ---
 # Dual-mode: try Gemini first, fall back to OpenAI
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "AIzaSyCP5K2A_Ba0vzkqKRCxGFob8ov2XH326Pk")
-OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY", "PLACEHOLDER")
+OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY", "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")
 
 # Gemini via OpenAI-compatible endpoint
 gemini_openai_client = None
@@ -97,9 +97,23 @@ def chat_completion(messages, response_format=None):
 
 
 def transcribe_audio(filepath):
-    """Try Gemini STT first, then OpenAI Whisper."""
+    """Try OpenAI Whisper first (better accuracy), then Gemini STT as fallback."""
     errors = []
-    # Try Gemini native STT
+    # Try OpenAI Whisper first (better at recognizing object names)
+    if openai_client:
+        try:
+            with open(filepath, "rb") as audio_file:
+                transcription = openai_client.audio.transcriptions.create(
+                    model="whisper-1",
+                    file=audio_file
+                )
+            text = transcription.text
+            print(f"\U0001f399\ufe0f STT (Whisper): {text}")
+            return text
+        except Exception as e:
+            errors.append(f"Whisper: {e}")
+            print(f"\u26a0\ufe0f Whisper failed: {e}")
+    # Fallback to Gemini native STT
     if gemini_native_client:
         try:
             gemini_file = gemini_native_client.files.upload(file=filepath)
@@ -116,20 +130,6 @@ def transcribe_audio(filepath):
         except Exception as e:
             errors.append(f"Gemini STT: {e}")
             print(f"\u26a0\ufe0f Gemini STT failed: {e}")
-    # Try OpenAI Whisper
-    if openai_client:
-        try:
-            with open(filepath, "rb") as audio_file:
-                transcription = openai_client.audio.transcriptions.create(
-                    model="whisper-1",
-                    file=audio_file
-                )
-            text = transcription.text
-            print(f"\U0001f399\ufe0f STT (Whisper): {text}")
-            return text
-        except Exception as e:
-            errors.append(f"Whisper: {e}")
-            print(f"\u26a0\ufe0f Whisper STT failed: {e}")
     raise Exception(f"All STT providers failed: {'; '.join(errors)}")
 
 # --- VOICE CONFIG ---
