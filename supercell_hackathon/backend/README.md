@@ -46,17 +46,36 @@ JSON
   "audio_url_congrats": "/static/congrats_uuid.mp3"
 }
 🏃‍♂️ Setup & Installation
-Install Dependencies:
 
-Bash
-pip install fastapi uvicorn openai elevenlabs python-multipart
-Environment Variables:
-Ensure your OPENAI_API_KEY and ELEVEN_API_KEY are set in main.py.
+**1. Create a virtual environment and install dependencies (one-time):**
 
-Run the Server:
+```bash
+cd supercell_hackathon/backend
+python3 -m venv venv
+source venv/bin/activate   # On Windows: venv\Scripts\activate
+pip install -r requirements.txt
+```
 
-Bash
+**2. Set API keys (for Genie voice + wish processing):**
+
+```bash
+export OPENAI_API_KEY=sk-your-openai-key
+export ELEVEN_API_KEY=your-elevenlabs-key   # optional; falls back to OpenAI TTS
+```
+
+**3. Run the backend:**
+
+```bash
+# From backend folder, with venv activated:
 python3 main.py
+# Or use the script (activates venv if present):
+./run_backend.sh
+```
+
+Server runs at **http://localhost:8000**. Unity is configured to use this URL.
+
+**4. Test the full game:**  
+Open the Unity project (`supercell_hackathon`), open your scene, and press **Play**. Make sure the backend is running first.
 🧪 Quick Test Command (Generate & Send)
 Test the full pipeline (Transcription -> GPT -> ElevenLabs) with one command:
 

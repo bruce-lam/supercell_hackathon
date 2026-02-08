@@ -30,8 +30,8 @@ app.add_middleware(
 )
 
 # --- CLIENTS ---
-client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY", "PLACEHOLDER"))
-eleven_client = ElevenLabs(api_key=os.environ.get("ELEVEN_API_KEY", "PLACEHOLDER"))
+client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY", "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"))
+eleven_client = ElevenLabs(api_key=os.environ.get("ELEVEN_API_KEY", "sk_1f74ed8b0e8a3ea5bc233ce84444c8de2b15bbdd7edb9fb5"))
 
 # --- VOICE CONFIG ---
 GENIE_VOICE_ID = os.environ.get("ELEVEN_VOICE_ID", "n1PvBOwxb8X6m7tahp2h")
@@ -83,10 +83,7 @@ You MUST judge the wish based ONLY on those provided laws.
 Use ellipses (...) for dramatic pauses, capitalize words for emphasis, and use expressive punctuation. 
 Your tone is bored, gravelly, and unimpressed.
 
-### THE ASSETS:
-- "sphere", "cube", "cylinder", "capsule", "anvil_basic", "stick_basic", 
-- "key_basic", "duck_basic", "blade_basic", "shield_basic", "crystal_basic", 
-- "chalice_basic", "book_basic", "ring_basic", "cone_basic", "heart_basic", "star_basic"
+### THE ASSETS: "sword", "shield", "bomb", "hammer", "potion", "chair", "table", "bed", "toilet", "lamp", "door", "chest", "sofa", "closet", "fridge", "microwave", "tv", "coffee", "sink", "tree", "rock", "mushroom", "flower", "cloud", "fire", "pizza", "burger", "banana", "cheese", "cake", "duck", "spider", "fish", "cat", "key", "ladder", "coin", "drink", "toy", "camera", "box", "ball", "heart", "trophy", "battery", "star", "clock", "money", "firstaid", "skull", "lock", "gem", "barrel", "candle", "axe", "jug", "cup", "bag", "bucket", "food", "firewood", "fence", "stairs", "bottle", "pumpkin", "lantern", "book", "broom", "cauldron", "stove", "pan", "pot", "knife", "plate", "flashlight", "waterbottle", "pills", "cannedfood", "walkie", "matchbox", "tape", "washing_machine", "boulder", "desk", "wardrobe", "mirror", "plant", "printer", "vending", "mug", "vase", "tablelamp", "mask"
 
 ### TWO-STAGE VOICE INSTRUCTIONS:
 1. "drop_voice": A reaction to the physical object as it falls from the pipe. 
@@ -98,7 +95,7 @@ You are a jerk. Even if you open the door, try to sabotage the player's wish in 
 - If they ask for something beautiful, give it a 'vfx_type' of 'smoke' to ruin the look.
 - Use the 'drop_voice' to brag about how you've 'improved' their wish.
 For the second and third doors, make it increasingly harder. Even if their wish is 1% thwartable, do it. 
-It should be very hard to open the door but it should also be reasonable.
+It should be very hard to open the door but it should also be reasonable. Object_name MUST be from the assets list provided above.
 
 OUTPUT FORMAT (JSON ONLY):
 {

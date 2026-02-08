@@ -42,6 +42,13 @@ public class ItemPrefabGenerator : MonoBehaviour
             new ItemDef("lamp",    new Color(1.0f, 0.95f, 0.4f),   PrimitiveType.Capsule,   new Vector3(0.15f, 0.3f, 0.15f)),
             new ItemDef("door",    new Color(0.5f, 0.3f, 0.1f),    PrimitiveType.Cube,      new Vector3(0.6f, 1.2f, 0.08f)),
             new ItemDef("chest",   new Color(0.6f, 0.45f, 0.1f),   PrimitiveType.Cube,      new Vector3(0.5f, 0.35f, 0.35f)),
+            new ItemDef("sofa",    new Color(0.5f, 0.3f, 0.2f),    PrimitiveType.Cube,      new Vector3(0.8f, 0.4f, 0.5f)),
+            new ItemDef("closet",  new Color(0.55f, 0.4f, 0.25f),  PrimitiveType.Cube,      new Vector3(0.5f, 0.8f, 0.4f)),
+            new ItemDef("fridge",  new Color(0.9f, 0.92f, 0.95f),  PrimitiveType.Cube,      new Vector3(0.5f, 0.9f, 0.5f)),
+            new ItemDef("microwave", new Color(0.4f, 0.4f, 0.45f), PrimitiveType.Cube,      new Vector3(0.35f, 0.25f, 0.4f)),
+            new ItemDef("tv",      new Color(0.15f, 0.15f, 0.18f), PrimitiveType.Cube,      new Vector3(0.8f, 0.5f, 0.08f)),
+            new ItemDef("coffee",  new Color(0.4f, 0.25f, 0.15f),  PrimitiveType.Cube,      new Vector3(0.25f, 0.3f, 0.2f)),
+            new ItemDef("sink",    new Color(0.85f, 0.85f, 0.9f),  PrimitiveType.Cube,      new Vector3(0.5f, 0.35f, 0.4f)),
 
             // ── NATURE ──
             new ItemDef("tree",    new Color(0.2f, 0.6f, 0.15f),   PrimitiveType.Capsule,   new Vector3(0.3f, 0.6f, 0.3f)),
@@ -64,14 +71,86 @@ public class ItemPrefabGenerator : MonoBehaviour
             new ItemDef("fish",    new Color(0.2f, 0.5f, 0.9f),    PrimitiveType.Capsule,   new Vector3(0.1f, 0.2f, 0.1f)),
             new ItemDef("cat",     new Color(0.9f, 0.6f, 0.2f),    PrimitiveType.Capsule,   new Vector3(0.15f, 0.2f, 0.15f)),
 
-            // ── TOOLS ──
+            // ── TOOLS / MISC ──
             new ItemDef("key",     new Color(0.85f, 0.75f, 0.15f), PrimitiveType.Cube,      new Vector3(0.05f, 0.2f, 0.1f)),
             new ItemDef("ladder",  new Color(0.6f, 0.45f, 0.2f),   PrimitiveType.Cube,      new Vector3(0.3f, 0.8f, 0.05f)),
             new ItemDef("coin",    new Color(1.0f, 0.85f, 0.0f),   PrimitiveType.Cylinder,  new Vector3(0.15f, 0.02f, 0.15f)),
+            new ItemDef("drink",   new Color(0.2f, 0.5f, 0.9f),    PrimitiveType.Cylinder,  new Vector3(0.08f, 0.2f, 0.08f)),
+            new ItemDef("toy",     new Color(0.95f, 0.4f, 0.4f),   PrimitiveType.Sphere,    new Vector3(0.15f, 0.15f, 0.15f)),
+            new ItemDef("camera",  new Color(0.2f, 0.2f, 0.2f),    PrimitiveType.Cube,      new Vector3(0.12f, 0.08f, 0.18f)),
 
             // ── SHAPES ──
             new ItemDef("box",     new Color(0.65f, 0.45f, 0.25f), PrimitiveType.Cube,      new Vector3(0.3f, 0.3f, 0.3f)),
             new ItemDef("ball",    new Color(0.9f, 0.15f, 0.15f),  PrimitiveType.Sphere,    new Vector3(0.25f, 0.25f, 0.25f)),
+
+            // ── FROM BTM / COLLECTIBLES ──
+            new ItemDef("heart",   new Color(0.95f, 0.2f, 0.3f),   PrimitiveType.Sphere,    new Vector3(0.2f, 0.2f, 0.2f)),
+            new ItemDef("trophy",  new Color(0.9f, 0.75f, 0.2f),  PrimitiveType.Cube,      new Vector3(0.2f, 0.35f, 0.2f)),
+            new ItemDef("battery", new Color(0.3f, 0.7f, 0.2f),   PrimitiveType.Cylinder, new Vector3(0.08f, 0.15f, 0.08f)),
+            new ItemDef("star",    new Color(1f, 0.9f, 0.2f),      PrimitiveType.Sphere,    new Vector3(0.2f, 0.2f, 0.2f)),
+            new ItemDef("clock",   new Color(0.3f, 0.3f, 0.35f),   PrimitiveType.Cylinder, new Vector3(0.2f, 0.05f, 0.2f)),
+            new ItemDef("money",   new Color(0.2f, 0.6f, 0.2f),    PrimitiveType.Cube,      new Vector3(0.15f, 0.05f, 0.08f)),
+            new ItemDef("firstaid",new Color(0.9f, 0.2f, 0.2f),    PrimitiveType.Cube,      new Vector3(0.15f, 0.2f, 0.08f)),
+            new ItemDef("skull",   new Color(0.9f, 0.88f, 0.8f),   PrimitiveType.Sphere,    new Vector3(0.2f, 0.25f, 0.2f)),
+            new ItemDef("lock",    new Color(0.4f, 0.35f, 0.3f),  PrimitiveType.Cube,      new Vector3(0.08f, 0.08f, 0.05f)),
+            new ItemDef("gem",     new Color(0.2f, 0.6f, 1f),     PrimitiveType.Sphere,    new Vector3(0.15f, 0.15f, 0.15f)),
+
+            // ── MEDIEVAL / PROPS ──
+            new ItemDef("barrel",  new Color(0.5f, 0.35f, 0.2f),  PrimitiveType.Cylinder, new Vector3(0.3f, 0.4f, 0.3f)),
+            new ItemDef("candle",  new Color(0.95f, 0.9f, 0.7f),   PrimitiveType.Cylinder, new Vector3(0.05f, 0.15f, 0.05f)),
+            new ItemDef("axe",     new Color(0.4f, 0.25f, 0.15f),  PrimitiveType.Cube,      new Vector3(0.1f, 0.4f, 0.05f)),
+            new ItemDef("jug",     new Color(0.6f, 0.4f, 0.2f),    PrimitiveType.Cylinder, new Vector3(0.12f, 0.2f, 0.12f)),
+            new ItemDef("cup",     new Color(0.9f, 0.85f, 0.8f),   PrimitiveType.Cylinder, new Vector3(0.08f, 0.1f, 0.08f)),
+            new ItemDef("bag",     new Color(0.45f, 0.35f, 0.25f), PrimitiveType.Cube,      new Vector3(0.25f, 0.3f, 0.15f)),
+            new ItemDef("bucket",  new Color(0.4f, 0.35f, 0.3f),   PrimitiveType.Cylinder, new Vector3(0.2f, 0.2f, 0.2f)),
+            new ItemDef("food",    new Color(0.8f, 0.5f, 0.2f),    PrimitiveType.Cube,      new Vector3(0.15f, 0.1f, 0.15f)),
+            new ItemDef("firewood",new Color(0.45f, 0.3f, 0.15f), PrimitiveType.Cube,      new Vector3(0.4f, 0.08f, 0.08f)),
+            new ItemDef("fence",   new Color(0.5f, 0.4f, 0.25f),   PrimitiveType.Cube,      new Vector3(0.5f, 0.3f, 0.05f)),
+            new ItemDef("stairs",  new Color(0.5f, 0.45f, 0.4f),   PrimitiveType.Cube,      new Vector3(0.5f, 0.3f, 0.5f)),
+
+            // ── BOTTLE / MAGIC / HALLOWEEN ──
+            new ItemDef("bottle",  new Color(0.2f, 0.6f, 0.9f),   PrimitiveType.Capsule,   new Vector3(0.08f, 0.2f, 0.08f)),
+            new ItemDef("pumpkin", new Color(1f, 0.5f, 0.1f),     PrimitiveType.Sphere,    new Vector3(0.3f, 0.3f, 0.3f)),
+            new ItemDef("lantern", new Color(0.9f, 0.7f, 0.2f),   PrimitiveType.Cube,      new Vector3(0.15f, 0.25f, 0.1f)),
+            new ItemDef("book",    new Color(0.4f, 0.25f, 0.15f), PrimitiveType.Cube,      new Vector3(0.15f, 0.2f, 0.05f)),
+            new ItemDef("broom",   new Color(0.45f, 0.3f, 0.15f), PrimitiveType.Cube,      new Vector3(0.05f, 0.5f, 0.05f)),
+            new ItemDef("cauldron",new Color(0.2f, 0.2f, 0.2f),   PrimitiveType.Sphere,    new Vector3(0.35f, 0.25f, 0.35f)),
+
+            // ── KITCHEN (Pandazole) ──
+            new ItemDef("stove",   new Color(0.4f, 0.4f, 0.45f),  PrimitiveType.Cube,      new Vector3(0.5f, 0.4f, 0.5f)),
+            new ItemDef("pan",     new Color(0.3f, 0.3f, 0.35f),  PrimitiveType.Cylinder, new Vector3(0.2f, 0.05f, 0.2f)),
+            new ItemDef("pot",     new Color(0.35f, 0.35f, 0.4f), PrimitiveType.Cylinder, new Vector3(0.2f, 0.2f, 0.2f)),
+            new ItemDef("knife",   new Color(0.6f, 0.6f, 0.65f),  PrimitiveType.Cube,      new Vector3(0.02f, 0.2f, 0.05f)),
+            new ItemDef("plate",   new Color(0.95f, 0.95f, 0.95f),PrimitiveType.Cylinder, new Vector3(0.2f, 0.02f, 0.2f)),
+
+            // ── SURVIVAL TOOLS ──
+            new ItemDef("flashlight", new Color(0.2f, 0.2f, 0.25f), PrimitiveType.Cube,   new Vector3(0.05f, 0.15f, 0.03f)),
+            new ItemDef("waterbottle", new Color(0.3f, 0.6f, 0.9f), PrimitiveType.Cylinder, new Vector3(0.06f, 0.2f, 0.06f)),
+            new ItemDef("pills",   new Color(0.95f, 0.95f, 1f),   PrimitiveType.Cube,      new Vector3(0.05f, 0.02f, 0.03f)),
+            new ItemDef("cannedfood", new Color(0.8f, 0.5f, 0.3f), PrimitiveType.Cylinder, new Vector3(0.08f, 0.12f, 0.08f)),
+            new ItemDef("walkie",  new Color(0.2f, 0.2f, 0.25f),   PrimitiveType.Cube,      new Vector3(0.08f, 0.15f, 0.04f)),
+            new ItemDef("matchbox", new Color(0.9f, 0.2f, 0.2f),   PrimitiveType.Cube,      new Vector3(0.05f, 0.02f, 0.03f)),
+            new ItemDef("tape",    new Color(0.9f, 0.9f, 0.3f),    PrimitiveType.Cylinder, new Vector3(0.05f, 0.02f, 0.05f)),
+
+            // ── WASHING / BATHROOM ──
+            new ItemDef("washing_machine", new Color(0.85f, 0.85f, 0.9f), PrimitiveType.Cube, new Vector3(0.5f, 0.6f, 0.5f)),
+
+            // ── ROCKS / NATURE ──
+            new ItemDef("boulder", new Color(0.5f, 0.48f, 0.45f), PrimitiveType.Sphere,    new Vector3(0.5f, 0.4f, 0.5f)),
+
+            // ── NAPPIN OFFICE ──
+            new ItemDef("desk",    new Color(0.45f, 0.35f, 0.25f), PrimitiveType.Cube,     new Vector3(0.8f, 0.4f, 0.5f)),
+            new ItemDef("wardrobe",new Color(0.5f, 0.4f, 0.3f),    PrimitiveType.Cube,      new Vector3(0.5f, 0.9f, 0.4f)),
+            new ItemDef("mirror",  new Color(0.8f, 0.85f, 0.9f),   PrimitiveType.Cube,      new Vector3(0.5f, 0.6f, 0.05f)),
+            new ItemDef("plant",   new Color(0.2f, 0.6f, 0.2f),    PrimitiveType.Capsule,   new Vector3(0.2f, 0.3f, 0.2f)),
+            new ItemDef("printer",new Color(0.3f, 0.3f, 0.35f),   PrimitiveType.Cube,      new Vector3(0.3f, 0.2f, 0.25f)),
+            new ItemDef("vending",new Color(0.2f, 0.2f, 0.25f),    PrimitiveType.Cube,      new Vector3(0.4f, 0.7f, 0.35f)),
+            new ItemDef("mug",     new Color(0.4f, 0.25f, 0.15f), PrimitiveType.Cylinder, new Vector3(0.08f, 0.1f, 0.08f)),
+
+            // ── DECOR / MISC ──
+            new ItemDef("vase",    new Color(0.6f, 0.4f, 0.5f),   PrimitiveType.Cylinder, new Vector3(0.12f, 0.25f, 0.12f)),
+            new ItemDef("tablelamp", new Color(0.95f, 0.9f, 0.6f), PrimitiveType.Capsule, new Vector3(0.12f, 0.25f, 0.12f)),
+            new ItemDef("mask",    new Color(0.9f, 0.5f, 0.2f),   PrimitiveType.Cube,      new Vector3(0.2f, 0.25f, 0.05f)),
         };
 
         int count = 0;
