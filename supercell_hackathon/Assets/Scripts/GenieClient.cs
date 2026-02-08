@@ -384,7 +384,7 @@ public class GenieClient : MonoBehaviour
     {
         yield return new WaitForSeconds(0.5f); // Wait for physics to settle
         // Find any Rigidbody without ItemPickup and add one
-        foreach (var rb in FindObjectsOfType<Rigidbody>())
+        foreach (var rb in FindObjectsByType<Rigidbody>(FindObjectsSortMode.None))
         {
             if (rb.GetComponent<ItemPickup>() == null && rb.GetComponent<PipeSpawner>() == null
                 && rb.GetComponent<CharacterController>() == null)
@@ -407,7 +407,7 @@ public class GenieClient : MonoBehaviour
             if (mainCam == null)
             {
                 // Fallback: find any active camera in the scene
-                mainCam = FindObjectOfType<Camera>();
+                mainCam = FindAnyObjectByType<Camera>();
                 if (mainCam != null)
                     Debug.LogWarning($"[GenieClient] Camera.main is null! Using fallback camera: '{mainCam.gameObject.name}'. Consider adding 'MainCamera' tag.");
             }
@@ -433,7 +433,7 @@ public class GenieClient : MonoBehaviour
         int pickupableItems = 0;
         float nearestAnyDist = float.MaxValue;
 
-        foreach (var item in FindObjectsOfType<ItemPickup>())
+        foreach (var item in FindObjectsByType<ItemPickup>(FindObjectsSortMode.None))
         {
             totalItems++;
             if (item == null) continue;
@@ -496,20 +496,24 @@ public class GenieClient : MonoBehaviour
         string key = isVR ? "A" : "E";
         GameObject promptPanel = interactionPrompt.transform.parent.gameObject;
 
+        // Clean item names (strip "(Clone)" suffix)
+        string heldName = heldItem != null ? heldItem.gameObject.name.Replace("(Clone)", "").Trim() : "";
+        string nearName = nearestItem != null ? nearestItem.gameObject.name.Replace("(Clone)", "").Trim() : "";
+
         if (heldItem != null && isNearDoor)
         {
             promptPanel.SetActive(true);
-            interactionPrompt.text = $"Press <color=#00FF88><b>[{key}]</b></color> to try <color=#FFD700>{heldItem.gameObject.name}</color> on the door";
+            interactionPrompt.text = $"Press <color=#00FF88><b>[{key}]</b></color> to try <color=#FFD700>{heldName}</color> on the door";
         }
         else if (heldItem != null)
         {
             promptPanel.SetActive(true);
-            interactionPrompt.text = $"Press <color=#FFD700><b>[{key}]</b></color> to drop <color=#FFD700>{heldItem.gameObject.name}</color>";
+            interactionPrompt.text = $"Holding <color=#FFD700>{heldName}</color>  —  Press <color=#FF6666><b>[{key}]</b></color> to drop\n<color=#888888><size=70%>Walk to a door to try it!</size></color>";
         }
         else if (nearestItem != null)
         {
             promptPanel.SetActive(true);
-            interactionPrompt.text = $"Press <color=#00FF88><b>[{key}]</b></color> to pick up <color=#FFD700>{nearestItem.gameObject.name}</color>";
+            interactionPrompt.text = $"Press <color=#00FF88><b>[{key}]</b></color> to pick up <color=#FFD700>{nearName}</color>";
         }
         else
         {
@@ -834,10 +838,10 @@ public class GenieClient : MonoBehaviour
 
             if (!string.IsNullOrEmpty(transition.audio_url))
             {
-                ShowSubtitle(transition.subtitle, 30f); // Long duration — keep visible during audio + reading
+                ShowSubtitle(transition.subtitle, 60f); // Very long duration — keep visible during audio + reading
                 yield return StartCoroutine(PlayAudioFromUrl(serverUrl + transition.audio_url));
-                // Keep subtitle visible for extra reading time after audio
-                yield return new WaitForSeconds(6f);
+                // Keep subtitle visible for extra reading time after audio finishes
+                yield return new WaitForSeconds(20f);
                 HideSubtitle();
             }
 
