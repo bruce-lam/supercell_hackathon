@@ -2,12 +2,13 @@
 
 > **Category: AI-Game** — A voice-powered VR escape room built with Generative AI at its core.
 
-**Hypnagogia** is a game where you negotiate with a cynical, wish-granting Genie to escape three enchanted rooms. You speak your wishes aloud, the Genie interprets them, drops objects from a magical pipe, and decides — with plenty of sarcasm — whether your logic is worthy of passage. Every interaction is powered entirely by Generative AI. The game cannot exist without it.
+**Hypnagogia** is a game where you negotiate with a cynical, wish-granting Genie to escape three enchanted rooms. You speak your wishes aloud, the Genie interprets them, drops objects from a magical pipe, and decides — with plenty of sarcasm — whether your logic is worthy of passage. Every interaction is powered entirely by Generative AI. After you escape all three doors, a **Reactor**-powered wakeup scene opens in your browser — an explorable AI-generated world. The game cannot exist without it.
 
 ![Unity](https://img.shields.io/badge/Unity_6-000000?style=flat&logo=unity)
 ![GPT-4o](https://img.shields.io/badge/GPT--4o-412991?style=flat&logo=openai)
 ![ElevenLabs](https://img.shields.io/badge/ElevenLabs-000000?style=flat)
 ![Python](https://img.shields.io/badge/FastAPI-009688?style=flat&logo=fastapi)
+![Reactor](https://img.shields.io/badge/Reactor-000000?style=flat)
 
 ---
 
@@ -18,6 +19,7 @@
 - **Python 3.11+**
 - **OpenAI API Key** — [platform.openai.com/api-keys](https://platform.openai.com/api-keys)
 - **ElevenLabs API Key** — [elevenlabs.io/app/settings/api-keys](https://elevenlabs.io/app/settings/api-keys)
+- **Reactor API Key** — [reactor.inc](https://reactor.inc) (for wakeup scene after door 3)
 
 ### Step 1: Start the Backend
 
@@ -36,6 +38,7 @@ pip install -r requirements.txt
 cat > .env <<EOF
 OPENAI_API_KEY=sk-your-openai-key-here
 ELEVEN_API_KEY=your-elevenlabs-key-here
+REACTOR_API_KEY=rk-your-reactor-key-here
 EOF
 
 # Start the server
@@ -44,7 +47,20 @@ python main.py
 
 You should see: `🧞 Genie backend running at http://localhost:8000`
 
-### Step 2: Open Unity
+### Step 2: (Optional) Start the Reactor Wakeup App
+
+To enable the wakeup scene that opens after door 3:
+
+```bash
+cd my-app
+pnpm install
+# Add NEXT_PUBLIC_REACTOR_API_KEY=rk_... to .env.local
+pnpm dev
+```
+
+Then open `http://localhost:3000/wakeup` when prompted, or it will open automatically when you pass door 3.
+
+### Step 3: Open Unity
 
 1. Open the project in **Unity 6**
 2. Open the scene: `Assets/Hypnagogia_Main.unity`
@@ -53,12 +69,13 @@ You should see: `🧞 Genie backend running at http://localhost:8000`
 5. Press **Play** ▶️
 6. The Genie will introduce itself — listen and then **speak your wish** into your microphone
 
-### Step 3: Play!
+### Step 4: Play!
 
 - 🎙️ **Speak naturally** — "I wish for something red and heavy"
 - 📦 Watch the object tumble from the pipe
 - 🗣️ Listen to the Genie roast you
 - 🚪 Walk to the door — if the Genie approves, it swings open with a creak
+- 🌅 **After door 3** — Your browser opens the Reactor wakeup scene; explore an AI-generated bedroom with WASD
 
 ---
 
@@ -71,6 +88,7 @@ You're trapped in a mystical room with **three locked doors**, each governed by 
 3. **📦 An object drops from the pipe** — One of 449 3D models tumbles out with full physics
 4. **🗣️ The Genie voices its verdict** — ElevenLabs synthesizes sarcastic dialogue in real-time
 5. **🚪 The door opens... or doesn't** — If your logic satisfied the law, you escape. If not, the Genie gloats.
+6. **🌅 Reactor wakeup scene** — After passing door 3, your browser opens an explorable AI world (Reactor WorldCore) — a cozy bedroom you can move through with WASD.
 
 The Genie is a *Monkey's Paw* — it deliberately misinterprets wishes. Ask for "something red" and it might drop a red fish. Ask for "a weapon" and it might give you a rubber duck. You must be precise.
 
@@ -88,7 +106,7 @@ The Genie is a *Monkey's Paw* — it deliberately misinterprets wishes. Ask for 
 
 This game uses **Generative AI in every layer** — not as a feature, but as the foundation. Without GenAI, this game literally cannot function. There are no scripted responses, no pre-recorded dialogue, no hardcoded puzzle solutions.
 
-### In-Game: Three AI Systems in Real-Time
+### In-Game: Four AI Systems in Real-Time
 
 #### 1. 🎙️ OpenAI Whisper — Hearing the Player
 - Players speak naturally into their microphone — no menus, no typing
@@ -123,6 +141,13 @@ This game uses **Generative AI in every layer** — not as a feature, but as the
 - Produces two audio clips per wish, plus intro narration and room transition dialogue
 - Background music automatically ducks when the Genie speaks
 
+#### 4. 🌅 Reactor — The Wakeup Scene
+- After the player passes door 3, Unity opens the browser to `/wakeup`
+- A Next.js app connects to **Reactor WorldCore** — a real-time AI world model
+- The scene starts with a "waking up in a cozy bedroom" prompt
+- Player explores with WASD + camera controls (IJKL)
+- Full interactivity: move, look around, change the scene prompt
+
 #### The AI Pipeline (per wish)
 
 ```
@@ -137,6 +162,8 @@ Player speaks → [Whisper STT] → text
           verdict_voice.mp3           colliders + VFX
                     ↓                           ↓
               Audio plays ←──── Player interacts with door
+                    ↓
+         All 3 doors opened? ──→ Browser opens Reactor wakeup scene
 ```
 
 ### In Development: AI-Assisted Game Building
@@ -148,6 +175,7 @@ Beyond gameplay, **Generative AI was used extensively to build the game itself**
 | **Google Gemini (Antigravity)** | Pair-programmed the entire codebase — Unity scripts, editor tools, procedural textures, audio integration, material debugging, backend API, this README, and more. Acted as a real-time co-developer across every aspect of the game. |
 | **ElevenLabs Sound Effects API** | Generated door sound effects (wooden creak, heavy thud) from text descriptions — no need to source audio files manually |
 | **GPT-4o** | Designed the Genie persona, puzzle laws, and rejection dialogue patterns |
+| **Reactor** | WorldCore model powers the post-game wakeup scene — explorable AI-generated 3D world |
 
 **Every line of code in this project was written or co-written with GenAI assistance.** The game's architecture, puzzle logic, audio pipeline, material system, editor automation, and deployment scripts were all developed collaboratively with AI tools. This is a game that was not only powered by GenAI at runtime, but built by GenAI during development.
 
@@ -194,6 +222,15 @@ With minor additions (audio-based spatial cues for navigation), this game could 
 │                                     │
 │  Returns: JSON + streamed audio     │
 └─────────────────────────────────────┘
+               │ All doors opened
+               ↓
+┌─────────────────────────────────────┐
+│      my-app (Next.js + Reactor)     │
+│                                     │
+│  Reactor WorldCore → Wakeup scene   │
+│  /wakeup → explorable AI bedroom    │
+│  WASD + IJKL controls               │
+└─────────────────────────────────────┘
 ```
 
 ---
@@ -207,6 +244,7 @@ With minor additions (audio-based spatial cues for navigation), this game could 
 - **Background music** with automatic ducking when the Genie speaks
 - **Sound effects** — wooden door creak on open, generated via ElevenLabs SFX API
 - **Dynamic subtitles** — duration scales with text length, stays visible during audio
+- **Reactor wakeup scene** — After door 3, explore an AI-generated bedroom via Reactor WorldCore in the browser
 
 ---
 
@@ -233,6 +271,10 @@ supercell_hackathon/
 │   ├── requirements.txt               # Python dependencies
 │   ├── run_backend.sh                 # One-command launcher
 │   └── .env                           # API keys (not committed)
+├── my-app/                            # Next.js + Reactor wakeup scene
+│   ├── app/page.tsx                   # WorldCore main demo
+│   ├── app/wakeup/page.tsx            # Wakeup scene (opens after door 3)
+│   └── .env.local                     # NEXT_PUBLIC_REACTOR_API_KEY
 └── README.md
 ```
 
