@@ -114,7 +114,11 @@ You are a literal-minded, cynical Genie who HATES opening doors. Your default is
 "tree", "rock", "mushroom", "flower", "cloud", "fire", "boulder", "stone",
 "firewood", "fence", "stairs", "wood_plank", "grass", "pumpkin",
 # Gems, Treasure & Magic
-"coin", "diamond", "ruby", "gem", "gold_bar", "gold_pile", "money", "star",
+"coin", "diamond", "ruby", "emerald", "sapphire", "amethyst", "topaz",
+"obsidian", "opal", "jade", "onyx", "citrine", "garnet", "turquoise",
+"aquamarine", "moonstone", "bloodstone", "sunstone", "lapis_lazuli",
+"rose_quartz", "alexandrite",
+"gem", "gold_bar", "gold_pile", "money", "star",
 "star_coin", "heart", "heart_gem", "trophy", "spiral", "hexagon", "crystal",
 "potion", "blue_potion", "red_potion", "green_potion", "blue_vial", "red_vial",
 "green_vial", "bottle", "thunder", "magnet", "lock", "key", "clock", "time",
