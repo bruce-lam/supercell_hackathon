@@ -4,3 +4,16 @@
 **/*.aiff
 **/venv/
 .DS_Store
+
+# Unity generated
+**/Library/
+**/Temp/
+**/Logs/
+**/obj/
+**/Builds/
+**/UserSettings/
+
+# Backend generated
+**/static/*.mp3
+**/Logs/
+**/UserSettings/

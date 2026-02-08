@@ -1,0 +1,590 @@
+using UnityEngine;
+using UnityEngine.Networking;
+using System.Collections;
+using System.Collections.Generic;
+using System.IO;
+using UnityEngine.InputSystem;
+using TMPro;
+
+/// <summary>
+/// Bridge between Unity and the FastAPI Genie backend.
+/// Hold V to record a wish, release to send it.
+/// On Start: fetches door rules from /get_rules.
+/// After a door opens: advances to next room and plays transition voice.
+/// </summary>
+public class GenieClient : MonoBehaviour
+{
+    [Header("Backend")]
+    public string serverUrl = "http://localhost:8000";
+
+    [Header("References")]
+    [Tooltip("One PipeSpawner per room, indexed by door (Element 0 = Room 1, etc.)")]
+    public PipeSpawner[] pipeSpawners;
+    public AudioSource genieAudioSource;
+
+    [Header("UI")]
+    [Tooltip("Same subtitle text used by GenieIntro — shows clues and wish responses")]
+    public TextMeshProUGUI subtitleText;
+
+    [Header("Door References")]
+    [Tooltip("Assign your 3 door GameObjects here")]
+    public GameObject[] doors;
+
+    [Header("VFX Prefabs")]
+    [Tooltip("Assign from Assets/Prefabs/VFX - run Hypnagogia > Generate VFX Prefabs first")]
+    public GameObject vfxFire;
+    public GameObject vfxSmoke;
+    public GameObject vfxSparks;
+
+    [Header("Recording")]
+    public int recordingLengthSec = 10;
+    public int sampleRate = 44100;
+
+    [Header("Active Door")]
+    [Tooltip("Which door the player is trying (1, 2, or 3)")]
+    public int currentDoorId = 1;
+
+    private AudioClip micClip;
+    private bool isRecording = false;
+    private string micDevice;
+    private bool isRequestingHint = false;
+
+    // --- Session state: door rules from backend ---
+    private DoorRule[] doorRules;
+
+    /// <summary>Returns the PipeSpawner for the current room</summary>
+    private PipeSpawner ActivePipeSpawner
+    {
+        get
+        {
+            if (pipeSpawners == null || pipeSpawners.Length == 0) return null;
+            int idx = currentDoorId - 1;
+            if (idx >= 0 && idx < pipeSpawners.Length) return pipeSpawners[idx];
+            return pipeSpawners[0]; // fallback
+        }
+    }
+
+    /// <summary>Returns the door_rules string for the current door to send to the backend</summary>
+    private string CurrentDoorRulesString
+    {
+        get
+        {
+            if (doorRules == null || doorRules.Length == 0) return "No rules available";
+            int idx = currentDoorId - 1;
+            if (idx >= 0 && idx < doorRules.Length)
+                return $"Door {currentDoorId} Law: {doorRules[idx].law}";
+            return "No rules for this door";
+        }
+    }
+
+    void Start()
+    {
+        // Auto-find PipeSpawners if not assigned
+        if (pipeSpawners == null || pipeSpawners.Length == 0)
+            pipeSpawners = FindObjectsByType<PipeSpawner>(FindObjectsSortMode.None);
+
+        // Create AudioSource for Genie voice if not assigned
+        if (genieAudioSource == null)
+        {
+            genieAudioSource = gameObject.AddComponent<AudioSource>();
+            genieAudioSource.spatialBlend = 0f; // 2D audio
+        }
+
+        // Get default mic
+        if (Microphone.devices.Length > 0)
+        {
+            micDevice = Microphone.devices[0];
+            Debug.Log($"[GenieClient] Mic found: {micDevice}");
+        }
+        else
+        {
+            Debug.LogWarning("[GenieClient] No microphone found! Voice input disabled.");
+        }
+
+        // Fetch door rules from backend
+        StartCoroutine(FetchDoorRules());
+    }
+
+    // =====================================================
+    // FETCH DOOR RULES from /get_rules on session start
+    // =====================================================
+    IEnumerator FetchDoorRules()
+    {
+        string url = $"{serverUrl}/get_rules";
+        Debug.Log("[GenieClient] 🎲 Fetching door rules from backend...");
+
+        using (UnityWebRequest request = UnityWebRequest.Get(url))
+        {
+            yield return request.SendWebRequest();
+
+            if (request.result != UnityWebRequest.Result.Success)
+            {
+                Debug.LogError($"[GenieClient] ❌ Failed to fetch rules: {request.error}");
+                // Use fallback rules
+                doorRules = new DoorRule[] {
+                    new DoorRule { law = "Must be red", clue = "Bring me the color of passion." },
+                    new DoorRule { law = "Must be metal", clue = "Only cold iron opens this path." },
+                    new DoorRule { law = "Must be round", clue = "I seek something with no end." }
+                };
+                rulesLoaded = true;
+                yield break;
+            }
+
+            string json = request.downloadHandler.text;
+            Debug.Log($"[GenieClient] ✅ Door rules received: {json}");
+
+            // Parse the response
+            RulesResponse response = JsonUtility.FromJson<RulesResponse>(json);
+            if (response != null && response.doors != null)
+            {
+                doorRules = response.doors;
+                rulesLoaded = true;
+
+                for (int i = 0; i < doorRules.Length; i++)
+                {
+                    int clueCount = doorRules[i].clues != null ? doorRules[i].clues.Length : 0;
+                    Debug.Log($"[GenieClient] 🚪 Door {i + 1} | Law: {doorRules[i].law} | Clues: {clueCount}");
+                }
+            }
+        }
+    }
+
+    void Update()
+    {
+        var keyboard = Keyboard.current;
+        if (keyboard == null) return;
+
+        // Hold V to record a wish
+        if (keyboard.vKey.wasPressedThisFrame && !isRecording)
+        {
+            StartRecording();
+        }
+
+        if (keyboard.vKey.wasReleasedThisFrame && isRecording)
+        {
+            StopRecordingAndSend();
+        }
+
+        // Press H to request a progressive hint
+        if (keyboard.hKey.wasPressedThisFrame && !isRequestingHint)
+        {
+            StartCoroutine(RequestHint());
+        }
+    }
+
+    void StartRecording()
+    {
+        if (string.IsNullOrEmpty(micDevice)) return;
+
+        isRecording = true;
+        micClip = Microphone.Start(micDevice, false, recordingLengthSec, sampleRate);
+        Debug.Log("[GenieClient] 🎙️ Recording... (release V to send)");
+    }
+
+    void StopRecordingAndSend()
+    {
+        if (!isRecording) return;
+        isRecording = false;
+
+        int lastSample = Microphone.GetPosition(micDevice);
+        Microphone.End(micDevice);
+
+        if (lastSample <= 0)
+        {
+            Debug.LogWarning("[GenieClient] Recording was empty.");
+            return;
+        }
+
+        // Trim the clip to actual recorded length
+        float[] samples = new float[lastSample * micClip.channels];
+        micClip.GetData(samples, 0);
+
+        AudioClip trimmedClip = AudioClip.Create("wish", lastSample, micClip.channels, sampleRate, false);
+        trimmedClip.SetData(samples, 0);
+
+        Debug.Log($"[GenieClient] 🎙️ Recorded {lastSample / (float)sampleRate:F1}s of audio. Sending to Genie...");
+
+        // Convert to WAV and send
+        byte[] wavData = AudioClipToWav(trimmedClip);
+        StartCoroutine(SendWishToBackend(wavData));
+    }
+
+    IEnumerator SendWishToBackend(byte[] wavData)
+    {
+        string url = $"{serverUrl}/process_wish";
+
+        // Build multipart form — now includes door_rules from session
+        List<IMultipartFormSection> form = new List<IMultipartFormSection>();
+        form.Add(new MultipartFormDataSection("door_id", currentDoorId.ToString()));
+        form.Add(new MultipartFormDataSection("door_rules", CurrentDoorRulesString));
+        form.Add(new MultipartFormFileSection("file", wavData, "wish.wav", "audio/wav"));
+
+        Debug.Log($"[GenieClient] 📤 Sending wish for Door {currentDoorId} with rules: {CurrentDoorRulesString}");
+
+        using (UnityWebRequest request = UnityWebRequest.Post(url, form))
+        {
+            yield return request.SendWebRequest();
+
+            if (request.result != UnityWebRequest.Result.Success)
+            {
+                Debug.LogError($"[GenieClient] ❌ Backend error: {request.error}");
+                yield break;
+            }
+
+            string json = request.downloadHandler.text;
+            Debug.Log($"[GenieClient] ✅ Genie response: {json}");
+
+            // Parse the response
+            GenieResponse response = JsonUtility.FromJson<GenieResponse>(json);
+
+            // 1. Spawn the item from the CURRENT ROOM's pipe only
+            PipeSpawner pipeSpawner = ActivePipeSpawner;
+            if (pipeSpawner != null && !string.IsNullOrEmpty(response.object_name))
+            {
+                GameObject spawned = pipeSpawner.SpawnItem(response.object_name);
+
+                if (spawned != null)
+                {
+                    // Apply hex color from Genie
+                    if (!string.IsNullOrEmpty(response.hex_color))
+                    {
+                        Color genieColor;
+                        if (ColorUtility.TryParseHtmlString(response.hex_color, out genieColor))
+                        {
+                            Renderer rend = spawned.GetComponent<Renderer>();
+                            if (rend != null)
+                            {
+                                Material mat = new Material(rend.sharedMaterial);
+                                mat.color = genieColor;
+                                mat.SetColor("_BaseColor", genieColor);
+                                rend.material = mat;
+                            }
+                        }
+                    }
+
+                    // Apply scale from Genie
+                    if (response.scale > 0)
+                    {
+                        spawned.transform.localScale *= response.scale;
+                    }
+
+                    // Apply VFX from Genie
+                    AttachVFX(spawned, response.vfx_type);
+                }
+            }
+
+            // 2. Play drop voice audio with subtitle
+            if (!string.IsNullOrEmpty(response.audio_url_drop))
+            {
+                ShowSubtitle(response.drop_voice);
+                StartCoroutine(PlayAudioFromUrl(serverUrl + response.audio_url_drop));
+            }
+
+            // 3. Handle door opening (after a delay for dramatic effect)
+            if (response.door_open)
+            {
+                StartCoroutine(OpenDoorAfterDelay(response));
+            }
+        }
+    }
+
+    IEnumerator OpenDoorAfterDelay(GenieResponse response)
+    {
+        // Wait for drop voice to finish, then play congrats
+        yield return new WaitForSeconds(4f);
+
+        // Play congrats voice with subtitle
+        if (!string.IsNullOrEmpty(response.audio_url_congrats))
+        {
+            ShowSubtitle(response.congrats_voice);
+            StartCoroutine(PlayAudioFromUrl(serverUrl + response.audio_url_congrats));
+        }
+
+        // Open the door
+        int doorIndex = currentDoorId - 1;
+        if (doors != null && doorIndex >= 0 && doorIndex < doors.Length && doors[doorIndex] != null)
+        {
+            StartCoroutine(AnimateDoorOpen(doors[doorIndex]));
+            Debug.Log($"[GenieClient] 🚪 Door {currentDoorId} OPENED!");
+        }
+
+        // Wait for congrats to finish, then advance to next room
+        yield return new WaitForSeconds(5f);
+
+        // Advance to next door
+        if (currentDoorId < 3)
+        {
+            currentDoorId++;
+            Debug.Log($"[GenieClient] ➡️ Advanced to Door {currentDoorId}");
+
+            // Fetch and play the transition voice with the next clue
+            StartCoroutine(PlayRoomTransition(currentDoorId));
+        }
+        else
+        {
+            Debug.Log("[GenieClient] 🏆 ALL DOORS OPENED! Player wins!");
+        }
+    }
+
+    // =====================================================
+    // ROOM TRANSITION — play congrats + next clue
+    // =====================================================
+    IEnumerator PlayRoomTransition(int doorId)
+    {
+        string url = $"{serverUrl}/room_transition?door_id={doorId}";
+        Debug.Log($"[GenieClient] 🎙️ Fetching room transition for Door {doorId}...");
+
+        using (UnityWebRequest request = UnityWebRequest.Get(url))
+        {
+            yield return request.SendWebRequest();
+
+            if (request.result != UnityWebRequest.Result.Success)
+            {
+                Debug.LogWarning($"[GenieClient] ⚠️ Transition audio failed: {request.error}");
+                yield break;
+            }
+
+            string json = request.downloadHandler.text;
+            TransitionResponse transition = JsonUtility.FromJson<TransitionResponse>(json);
+
+            if (!string.IsNullOrEmpty(transition.audio_url))
+            {
+                ShowSubtitle(transition.subtitle);
+                yield return StartCoroutine(PlayAudioFromUrl(serverUrl + transition.audio_url));
+            }
+
+            Debug.Log($"[GenieClient] 🎉 Room transition: {transition.subtitle}");
+        }
+    }
+
+    IEnumerator AnimateDoorOpen(GameObject door)
+    {
+        // Use the Easy Door System's built-in open (respects saved open/closed states)
+        var easyDoor = door.GetComponent<EasyDoorSystem.EasyDoor>();
+        if (easyDoor != null)
+        {
+            easyDoor.OpenDoor();
+            Debug.Log($"[GenieClient] 🚪 Opening {door.name} via EasyDoor system");
+        }
+        else
+        {
+            // Fallback: simple Y rotation if no EasyDoor component
+            float duration = 1.5f;
+            float elapsed = 0f;
+            Quaternion startRot = door.transform.localRotation;
+            Quaternion endRot = startRot * Quaternion.Euler(0f, -90f, 0f);
+
+            while (elapsed < duration)
+            {
+                elapsed += Time.deltaTime;
+                float t = Mathf.SmoothStep(0f, 1f, elapsed / duration);
+                door.transform.localRotation = Quaternion.Lerp(startRot, endRot, t);
+                yield return null;
+            }
+
+            door.transform.localRotation = endRot;
+        }
+        yield return null;
+    }
+
+    IEnumerator PlayAudioFromUrl(string url)
+    {
+        using (UnityWebRequest www = UnityWebRequestMultimedia.GetAudioClip(url, AudioType.MPEG))
+        {
+            yield return www.SendWebRequest();
+
+            if (www.result == UnityWebRequest.Result.Success)
+            {
+                AudioClip clip = DownloadHandlerAudioClip.GetContent(www);
+                genieAudioSource.clip = clip;
+                genieAudioSource.Play();
+                Debug.Log($"[GenieClient] 🔊 Playing audio from: {url}");
+            }
+            else
+            {
+                Debug.LogWarning($"[GenieClient] Failed to load audio: {www.error}");
+            }
+        }
+    }
+
+    // --- SUBTITLES ---
+    void ShowSubtitle(string text)
+    {
+        if (subtitleText == null || string.IsNullOrEmpty(text)) return;
+        StopCoroutine("AutoHideSubtitle");
+        subtitleText.text = text;
+        subtitleText.alpha = 1f;
+        StartCoroutine("AutoHideSubtitle");
+    }
+
+    IEnumerator AutoHideSubtitle()
+    {
+        // Keep subtitle visible for 8 seconds, then fade out
+        yield return new WaitForSeconds(8f);
+        float elapsed = 0f;
+        while (elapsed < 1f)
+        {
+            elapsed += Time.deltaTime;
+            if (subtitleText != null)
+                subtitleText.alpha = Mathf.Lerp(1f, 0f, elapsed);
+            yield return null;
+        }
+        if (subtitleText != null)
+        {
+            subtitleText.alpha = 0f;
+            subtitleText.text = "";
+        }
+    }
+
+    // --- VFX ---
+    void AttachVFX(GameObject target, string vfxType)
+    {
+        if (string.IsNullOrEmpty(vfxType) || vfxType == "none") return;
+
+        GameObject vfxPrefab = null;
+        switch (vfxType.ToLower())
+        {
+            case "fire":  vfxPrefab = vfxFire; break;
+            case "smoke": vfxPrefab = vfxSmoke; break;
+            case "sparks": vfxPrefab = vfxSparks; break;
+        }
+
+        if (vfxPrefab == null)
+        {
+            Debug.LogWarning($"[GenieClient] VFX type '{vfxType}' not found or prefab not assigned.");
+            return;
+        }
+
+        GameObject vfx = Instantiate(vfxPrefab, target.transform);
+        vfx.transform.localPosition = Vector3.up * 0.2f;
+        Debug.Log($"[GenieClient] ✨ Attached {vfxType} VFX to {target.name}");
+    }
+
+    // --- WAV Encoding ---
+    byte[] AudioClipToWav(AudioClip clip)
+    {
+        float[] samples = new float[clip.samples * clip.channels];
+        clip.GetData(samples, 0);
+
+        using (MemoryStream stream = new MemoryStream())
+        using (BinaryWriter writer = new BinaryWriter(stream))
+        {
+            int sampleCount = samples.Length;
+            int channels = clip.channels;
+            int freq = clip.frequency;
+            int bitsPerSample = 16;
+
+            // WAV header
+            writer.Write(System.Text.Encoding.ASCII.GetBytes("RIFF"));
+            writer.Write(36 + sampleCount * 2);
+            writer.Write(System.Text.Encoding.ASCII.GetBytes("WAVE"));
+
+            // fmt chunk
+            writer.Write(System.Text.Encoding.ASCII.GetBytes("fmt "));
+            writer.Write(16);
+            writer.Write((short)1); // PCM
+            writer.Write((short)channels);
+            writer.Write(freq);
+            writer.Write(freq * channels * bitsPerSample / 8);
+            writer.Write((short)(channels * bitsPerSample / 8));
+            writer.Write((short)bitsPerSample);
+
+            // data chunk
+            writer.Write(System.Text.Encoding.ASCII.GetBytes("data"));
+            writer.Write(sampleCount * 2);
+
+            foreach (float sample in samples)
+            {
+                short s = (short)(Mathf.Clamp(sample, -1f, 1f) * short.MaxValue);
+                writer.Write(s);
+            }
+
+            return stream.ToArray();
+        }
+    }
+
+    // =====================================================
+    // REQUEST HINT — H key asks for progressive hint
+    // =====================================================
+    IEnumerator RequestHint()
+    {
+        isRequestingHint = true;
+        string url = $"{serverUrl}/get_hint?door_id={currentDoorId}";
+        Debug.Log($"[GenieClient] 💡 Requesting hint for Door {currentDoorId}...");
+
+        using (UnityWebRequest request = UnityWebRequest.Get(url))
+        {
+            yield return request.SendWebRequest();
+
+            if (request.result != UnityWebRequest.Result.Success)
+            {
+                Debug.LogWarning($"[GenieClient] ⚠️ Hint request failed: {request.error}");
+                isRequestingHint = false;
+                yield break;
+            }
+
+            string json = request.downloadHandler.text;
+            HintResponse hint = JsonUtility.FromJson<HintResponse>(json);
+
+            // Show subtitle
+            ShowSubtitle(hint.hint);
+
+            // Play voiced hint
+            if (!string.IsNullOrEmpty(hint.audio_url))
+            {
+                yield return StartCoroutine(PlayAudioFromUrl(serverUrl + hint.audio_url));
+            }
+
+            Debug.Log($"[GenieClient] 💡 Hint level {hint.hint_level} | Remaining: {hint.hints_remaining}");
+        }
+
+        isRequestingHint = false;
+    }
+
+    // --- Data classes for JSON parsing ---
+
+    [System.Serializable]
+    public class DoorRule
+    {
+        public string law;
+        public string[] clues;  // 3 progressive clues: Hard, Medium, Easy
+    }
+
+    [System.Serializable]
+    public class RulesResponse
+    {
+        public DoorRule[] doors;
+    }
+
+    [System.Serializable]
+    public class TransitionResponse
+    {
+        public string audio_url;
+        public string subtitle;
+    }
+
+    [System.Serializable]
+    public class HintResponse
+    {
+        public string hint;
+        public string audio_url;
+        public int hint_level;
+        public int hints_remaining;
+    }
+
+    [System.Serializable]
+    public class GenieResponse
+    {
+        public string object_name;
+        public string display_name;
+        public string hex_color;
+        public float scale;
+        public string vfx_type;
+        public bool door_open;
+        public string drop_voice;
+        public string congrats_voice;
+        public string audio_url_drop;
+        public string audio_url_congrats;
+        public string audio_url;
+    }
+}
