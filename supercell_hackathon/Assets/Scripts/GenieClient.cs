@@ -496,20 +496,24 @@ public class GenieClient : MonoBehaviour
         string key = isVR ? "A" : "E";
         GameObject promptPanel = interactionPrompt.transform.parent.gameObject;
 
+        // Clean item names (strip "(Clone)" suffix)
+        string heldName = heldItem != null ? heldItem.gameObject.name.Replace("(Clone)", "").Trim() : "";
+        string nearName = nearestItem != null ? nearestItem.gameObject.name.Replace("(Clone)", "").Trim() : "";
+
         if (heldItem != null && isNearDoor)
         {
             promptPanel.SetActive(true);
-            interactionPrompt.text = $"Press <color=#00FF88><b>[{key}]</b></color> to try <color=#FFD700>{heldItem.gameObject.name}</color> on the door";
+            interactionPrompt.text = $"Press <color=#00FF88><b>[{key}]</b></color> to try <color=#FFD700>{heldName}</color> on the door";
         }
         else if (heldItem != null)
         {
             promptPanel.SetActive(true);
-            interactionPrompt.text = $"Press <color=#FFD700><b>[{key}]</b></color> to drop <color=#FFD700>{heldItem.gameObject.name}</color>";
+            interactionPrompt.text = $"Holding <color=#FFD700>{heldName}</color>  —  Press <color=#FF6666><b>[{key}]</b></color> to drop\n<color=#888888><size=70%>Walk to a door to try it!</size></color>";
         }
         else if (nearestItem != null)
         {
             promptPanel.SetActive(true);
-            interactionPrompt.text = $"Press <color=#00FF88><b>[{key}]</b></color> to pick up <color=#FFD700>{nearestItem.gameObject.name}</color>";
+            interactionPrompt.text = $"Press <color=#00FF88><b>[{key}]</b></color> to pick up <color=#FFD700>{nearName}</color>";
         }
         else
         {
