@@ -115,8 +115,64 @@ public class PipeSpawner : MonoBehaviour
             return DoSpawn(chosen);
         }
 
-        Debug.LogWarning($"[PipeSpawner] ❌ Item '{itemName}' not found in {itemPrefabs.Length} prefabs!");
+        // No prefab found — return null; GenieClient will create a labeled fallback cube
+        Debug.LogWarning($"[PipeSpawner] ❌ Item '{itemName}' not found in {itemPrefabs.Length} prefabs — fallback cube will be created");
         return null;
+    }
+
+    /// <summary>
+    /// Creates a fallback labeled cube when no matching prefab exists.
+    /// The cube drops from the pipe with a floating label showing the display name.
+    /// </summary>
+    public GameObject SpawnFallbackCube(string displayName, Color color)
+    {
+        lastSpawnTime = Time.time;
+
+        Vector3 spawnPos = transform.position + transform.TransformDirection(spawnOffset);
+        GameObject cube = GameObject.CreatePrimitive(PrimitiveType.Cube);
+        cube.transform.position = spawnPos;
+        cube.transform.rotation = Random.rotation;
+        cube.transform.localScale = Vector3.one * 0.4f;
+        cube.name = displayName;
+
+        // Apply color via URP material
+        Renderer rend = cube.GetComponent<Renderer>();
+        if (rend != null)
+        {
+            Material mat = new Material(Shader.Find("Universal Render Pipeline/Lit"));
+            mat.color = color;
+            mat.SetColor("_BaseColor", color);
+            rend.material = mat;
+        }
+
+        // Add floating label
+        GameObject labelObj = new GameObject("Label");
+        labelObj.transform.SetParent(cube.transform);
+        labelObj.transform.localPosition = Vector3.up * 1.5f;
+        labelObj.transform.localScale = Vector3.one * 5f; // Scale up since parent cube is 0.4
+
+        var tmp = labelObj.AddComponent<TMPro.TextMeshPro>();
+        tmp.text = displayName;
+        tmp.fontSize = 3f;
+        tmp.alignment = TMPro.TextAlignmentOptions.Center;
+        tmp.color = Color.white;
+        tmp.enableAutoSizing = false;
+
+        // Make label face camera (billboard)
+        var billboard = labelObj.AddComponent<BillboardLabel>();
+
+        // Physics
+        Rigidbody rb = cube.AddComponent<Rigidbody>();
+        rb.linearVelocity = Vector3.down * dropForce;
+        if (addRandomSpin)
+            rb.angularVelocity = Random.insideUnitSphere * 3f;
+
+        // Auto-destroy
+        if (destroyAfterSeconds > 0)
+            Destroy(cube, destroyAfterSeconds);
+
+        Debug.Log($"[PipeSpawner] 📦 Spawned fallback cube: '{displayName}'");
+        return cube;
     }
 
     /// <summary>

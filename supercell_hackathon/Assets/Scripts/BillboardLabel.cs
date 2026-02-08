@@ -1,31 +1,27 @@
 using UnityEngine;
 
 /// <summary>
-/// Makes a GameObject always face the main camera (billboard effect).
-/// Attach to text labels so they're always readable.
+/// Makes a UI element always face the main camera (billboard effect).
+/// Attach to floating label GameObjects.
 /// </summary>
 public class BillboardLabel : MonoBehaviour
 {
-    private Transform cam;
+    private Camera cam;
 
     void Start()
     {
-        // Find the main camera
-        if (Camera.main != null)
-            cam = Camera.main.transform;
+        cam = Camera.main;
     }
 
     void LateUpdate()
     {
         if (cam == null)
         {
-            if (Camera.main != null)
-                cam = Camera.main.transform;
-            else
-                return;
+            cam = Camera.main;
+            if (cam == null) return;
         }
 
         // Face the camera
-        transform.LookAt(transform.position + cam.forward);
+        transform.LookAt(transform.position + cam.transform.forward);
     }
 }
