@@ -32,8 +32,8 @@ app.add_middleware(
 )
 
 # --- CLIENTS ---
-client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY", "PLACEHOLDER"))
-eleven_client = ElevenLabs(api_key=os.environ.get("ELEVEN_API_KEY", "PLACEHOLDER"))
+client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY", "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"))
+eleven_client = ElevenLabs(api_key=os.environ.get("ELEVEN_API_KEY", "sk_1f74ed8b0e8a3ea5bc233ce84444c8de2b15bbdd7edb9fb5"))
 
 # --- VOICE CONFIG ---
 GENIE_VOICE_ID = os.environ.get("ELEVEN_VOICE_ID", "n1PvBOwxb8X6m7tahp2h")
@@ -85,6 +85,7 @@ You are a literal-minded, cynical Genie who HATES opening doors. Your default is
 3. **Wrong object on purpose**: When the wish does NOT satisfy the law, give them an object that is *close* but wrong — so they learn. Example: law is "must be red", they say "I want a ball" → give them a BLUE ball (object_name "ball", hex_color blue). Your "congrats_voice" then explains why it FAILED: "A ball. How round. Unfortunately it is NOT red. Try again, mortal."
 4. **When they DO satisfy the law**: Only then set "door_open" to true. You may still Monkey's Paw the delivery: tiny scale (0.2), ugly vfx (smoke), or a backhanded "congrats_voice" — but the door opens.
 5. **Door 2 and Door 3**: Be even stricter. For later doors, require more precise wording or reject on technicalities (e.g. "you said 'something golden' — this is yellow. Yellow is not gold. DENIED.").
+6. **HOWEVER**: If the player's wish is a valid OR NOT valid object from the assets list, BUT it satisfies the law, then open the door. But if there is even a slight vagueness, you can monky paw them. 
 
 ### CREATIVE REJECTIONS:
 - Give an object FROM THE ASSET LIST that is *almost* right but fails the law (wrong color, wrong shape, wrong material). object_name MUST be one of the allowed assets.
@@ -187,7 +188,7 @@ async def get_rules():
                 
                 FORMAT: Return a JSON object with a list called 'doors'.
                 Each door must have:
-                1. 'law': A strict physical requirement (e.g., 'Must be made of gold').
+                1. 'law': A strict physical requirement, should be short and detailed but not too detailed (no exact numbers) (e.g., 'Must be made of gold').
                 2. 'clues': A list of exactly 3 strings ranging from Hard to Easy.
                    - Index 0 (Hard): Cryptic, atmospheric, poetic.
                    - Index 1 (Medium): A helpful hint about the material or shape.

@@ -1,0 +1,2 @@
+# Put your background music file here and name it "BackgroundMusic" (e.g. BackgroundMusic.mp3 or BackgroundMusic.wav).
+# The BackgroundMusic script will load it automatically. No need to assign in the Inspector.
