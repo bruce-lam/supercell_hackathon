@@ -17,6 +17,10 @@ public class GenieClient : MonoBehaviour
     [Header("Backend")]
     public string serverUrl = "http://localhost:8000";
 
+    [Header("Reactor Wakeup")]
+    [Tooltip("URL opened in browser when player passes door 3. Leave empty to disable.")]
+    public string wakeupSceneUrl = "http://localhost:3000/wakeup";
+
     [Header("References")]
     [Tooltip("One PipeSpawner per room, indexed by door (Element 0 = Room 1, etc.)")]
     public PipeSpawner[] pipeSpawners;
@@ -619,6 +623,11 @@ public class GenieClient : MonoBehaviour
         else
         {
             Debug.Log("[GenieClient] 🏆 ALL DOORS OPENED! Player wins!");
+            if (!string.IsNullOrEmpty(wakeupSceneUrl))
+            {
+                Application.OpenURL(wakeupSceneUrl);
+                Debug.Log($"[GenieClient] 🌅 Opening Reactor wakeup scene: {wakeupSceneUrl}");
+            }
         }
     }
 
