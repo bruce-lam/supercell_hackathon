@@ -37,11 +37,18 @@ public class SetupMaterials : MonoBehaviour
         Texture2D stoneTex = GenerateStoneWallTexture(512);
         SaveTexturePNG(stoneTex, "Assets/Materials/T_StoneWall.png");
 
+        // Force reimport so textures are fully available for material assignment
+        AssetDatabase.Refresh();
+        AssetDatabase.ImportAsset("Assets/Materials/T_MarbleFloor.png", ImportAssetOptions.ForceUpdate);
+        AssetDatabase.ImportAsset("Assets/Materials/T_PlasterWall.png", ImportAssetOptions.ForceUpdate);
+        AssetDatabase.ImportAsset("Assets/Materials/T_StoneWall.png", ImportAssetOptions.ForceUpdate);
+
         Material floorMat = CreateMat("FloorMaterial", new Color(0.95f, 0.93f, 0.90f), 0.82f);
         Texture2D savedFloorTex = AssetDatabase.LoadAssetAtPath<Texture2D>("Assets/Materials/T_MarbleFloor.png");
         if (savedFloorTex != null) {
             if (floorMat.HasProperty("_BaseMap")) { floorMat.SetTexture("_BaseMap", savedFloorTex); floorMat.SetTextureScale("_BaseMap", new Vector2(4f, 4f)); }
-            floorMat.mainTexture = savedFloorTex;
+        } else {
+            Debug.LogError("[Hypnagogia] Failed to load T_MarbleFloor.png!");
         }
         if (floorMat.HasProperty("_Metallic")) floorMat.SetFloat("_Metallic", 0.04f);
 
@@ -49,14 +56,16 @@ public class SetupMaterials : MonoBehaviour
         Texture2D savedWallTex = AssetDatabase.LoadAssetAtPath<Texture2D>("Assets/Materials/T_PlasterWall.png");
         if (savedWallTex != null) {
             if (wallMat.HasProperty("_BaseMap")) { wallMat.SetTexture("_BaseMap", savedWallTex); wallMat.SetTextureScale("_BaseMap", new Vector2(2f, 3f)); }
-            wallMat.mainTexture = savedWallTex;
+        } else {
+            Debug.LogError("[Hypnagogia] Failed to load T_PlasterWall.png!");
         }
 
         Material ceilMat = CreateMat("CeilingMaterial", new Color(0.22f, 0.18f, 0.16f), 0.3f);
         Texture2D savedStoneTex = AssetDatabase.LoadAssetAtPath<Texture2D>("Assets/Materials/T_StoneWall.png");
         if (savedStoneTex != null) {
             if (ceilMat.HasProperty("_BaseMap")) { ceilMat.SetTexture("_BaseMap", savedStoneTex); ceilMat.SetTextureScale("_BaseMap", new Vector2(2f, 2f)); }
-            ceilMat.mainTexture = savedStoneTex;
+        } else {
+            Debug.LogError("[Hypnagogia] Failed to load T_StoneWall.png!");
         }
         Material beamMat = CreateMat("BeamMaterial", new Color(0.2f, 0.14f, 0.1f), 0.25f);
 
@@ -125,13 +134,47 @@ public class SetupMaterials : MonoBehaviour
         spot.color = new Color(1f, 0.98f, 0.95f);
         spot.shadows = LightShadows.Soft;
 
-        // ── OPTIONAL: also apply to any existing floor/wall in scene (e.g. from template) ──
+        // ── FIX ALL BROKEN MATERIALS (pink = missing URP setup) ──
+        int fixedCount = 0;
+        var pipelineAsset = UnityEngine.Rendering.GraphicsSettings.currentRenderPipeline;
         foreach (Renderer r in Object.FindObjectsByType<Renderer>(FindObjectsSortMode.None))
         {
+            if (r == null || r.transform.IsChildOf(roomRoot.transform)) continue;
+
             string n = r.gameObject.name.ToLower();
-            if ((n.Contains("floor") || n == "plane") && r.transform.parent != roomRoot.transform) { r.sharedMaterial = floorMat; }
-            else if ((n.StartsWith("wall") || n.Contains("wall")) && r.transform.parent != roomRoot.transform) { r.sharedMaterial = wallMat; }
+
+            // Name-based: assign our materials to matching objects
+            if (n.Contains("floor") || n == "plane") { r.sharedMaterial = floorMat; fixedCount++; continue; }
+            if (n.Contains("wall") || n.Contains("corridor") || n.Contains("hallway")) { r.sharedMaterial = wallMat; fixedCount++; continue; }
+
+            // Fix any material that's broken (has URP Lit shader but missing keywords)
+            Material mat = r.sharedMaterial;
+            if (mat != null && pipelineAsset != null && pipelineAsset.defaultMaterial != null)
+            {
+                // Check if material is effectively broken: has no valid keywords or is missing the _BaseMap property value
+                bool isBroken = false;
+                if (mat.shader != null && mat.shader.name.Contains("Universal") && string.IsNullOrEmpty(mat.GetTag("RenderType", false)))
+                    isBroken = true;
+
+                // Also fix materials whose shader compiled but properties weren't upgraded
+                if (!isBroken && mat.shader != null && mat.shader.name == "Hidden/InternalErrorShader")
+                    isBroken = true;
+
+                if (isBroken)
+                {
+                    // Clone from pipeline default and copy the color
+                    Color origColor = mat.HasProperty("_BaseColor") ? mat.GetColor("_BaseColor") : mat.color;
+                    Material fixedMat = new Material(pipelineAsset.defaultMaterial);
+                    fixedMat.name = mat.name + "_Fixed";
+                    if (fixedMat.HasProperty("_BaseColor")) fixedMat.SetColor("_BaseColor", origColor);
+                    if (fixedMat.HasProperty("_Color")) fixedMat.SetColor("_Color", origColor);
+                    r.sharedMaterial = fixedMat;
+                    fixedCount++;
+                    Debug.Log($"[Hypnagogia] 🔧 Fixed broken material on '{r.gameObject.name}' (was: {mat.name})");
+                }
+            }
         }
+        if (fixedCount > 0) Debug.Log($"[Hypnagogia] Fixed {fixedCount} broken/unassigned materials");
 
         PlaceProp("Table", "table", new Vector3(-3.5f, 0f, 3.5f), new Vector3(0, 45, 0));
         PlaceProp("Chair", "chair", new Vector3(-2.5f, 0f, 2.5f), new Vector3(0, -135, 0));
@@ -160,6 +203,88 @@ public class SetupMaterials : MonoBehaviour
         MarkDirty();
         AssetDatabase.SaveAssets();
         Debug.Log("[Hypnagogia] ✨ High-end room created: HypnagogiaRoom. It should be selected and in view. If you still see the old room, find its parent in Hierarchy (e.g. Environment) and disable it.");
+    }
+
+    [MenuItem("Hypnagogia/Fix Pink Materials")]
+    static void FixPinkMaterials()
+    {
+        var pipelineAsset = UnityEngine.Rendering.GraphicsSettings.currentRenderPipeline;
+        if (pipelineAsset == null || pipelineAsset.defaultMaterial == null)
+        {
+            Debug.LogError("[Hypnagogia] No URP pipeline asset found! Go to Edit > Project Settings > Quality and set a URP pipeline asset.");
+            return;
+        }
+
+        // Load our existing materials as preferred replacements
+        Material wallMat = AssetDatabase.LoadAssetAtPath<Material>("Assets/Materials/WallMaterial.mat");
+        Material floorMat = AssetDatabase.LoadAssetAtPath<Material>("Assets/Materials/FloorMaterial.mat");
+
+        int fixedCount = 0;
+        foreach (Renderer r in Object.FindObjectsByType<Renderer>(FindObjectsSortMode.None))
+        {
+            if (r == null) continue;
+
+            // Check each material slot on this renderer
+            Material[] mats = r.sharedMaterials;
+            bool changed = false;
+            for (int i = 0; i < mats.Length; i++)
+            {
+                Material mat = mats[i];
+                if (mat == null)
+                {
+                    // Null material = definitely pink
+                    mats[i] = wallMat != null ? wallMat : new Material(pipelineAsset.defaultMaterial);
+                    changed = true;
+                    fixedCount++;
+                    Debug.Log($"[Hypnagogia] 🔧 Fixed NULL material on '{r.gameObject.name}' slot {i}");
+                    continue;
+                }
+
+                // Check if shader is the error shader (definitely pink)
+                if (mat.shader.name == "Hidden/InternalErrorShader")
+                {
+                    Color origColor = mat.HasProperty("_BaseColor") ? mat.GetColor("_BaseColor") : Color.white;
+                    Material fixedMat = new Material(pipelineAsset.defaultMaterial);
+                    fixedMat.name = mat.name + "_URPFixed";
+                    if (fixedMat.HasProperty("_BaseColor")) fixedMat.SetColor("_BaseColor", origColor);
+                    if (fixedMat.HasProperty("_Color")) fixedMat.SetColor("_Color", origColor);
+                    mats[i] = fixedMat;
+                    changed = true;
+                    fixedCount++;
+                    Debug.Log($"[Hypnagogia] 🔧 Fixed error-shader material on '{r.gameObject.name}': {mat.name}");
+                    continue;
+                }
+
+                // Check for URP materials that weren't properly upgraded (missing RenderType tag)
+                if (mat.shader.name.Contains("Universal") && string.IsNullOrEmpty(mat.GetTag("RenderType", false)))
+                {
+                    Color origColor = mat.HasProperty("_BaseColor") ? mat.GetColor("_BaseColor") : mat.color;
+                    Material fixedMat = new Material(pipelineAsset.defaultMaterial);
+                    fixedMat.name = mat.name + "_URPFixed";
+                    if (fixedMat.HasProperty("_BaseColor")) fixedMat.SetColor("_BaseColor", origColor);
+                    if (fixedMat.HasProperty("_Color")) fixedMat.SetColor("_Color", origColor);
+                    mats[i] = fixedMat;
+                    changed = true;
+                    fixedCount++;
+                    Debug.Log($"[Hypnagogia] 🔧 Fixed un-upgraded URP material on '{r.gameObject.name}': {mat.name}");
+                }
+            }
+            if (changed)
+            {
+                r.sharedMaterials = mats;
+                EditorUtility.SetDirty(r);
+            }
+        }
+
+        if (fixedCount > 0)
+        {
+            UnityEditor.SceneManagement.EditorSceneManager.MarkSceneDirty(UnityEditor.SceneManagement.EditorSceneManager.GetActiveScene());
+            Debug.Log($"[Hypnagogia] ✅ Fixed {fixedCount} broken material(s). Save the scene!");
+        }
+        else
+        {
+            Debug.Log("[Hypnagogia] ✅ No broken materials found — everything looks good!");
+        }
     }
 
     static void CreateWall(GameObject parent, string name, Vector3 pos, Vector3 scale, Material mat)

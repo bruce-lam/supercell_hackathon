@@ -2,6 +2,7 @@ import os
 import json
 import uuid
 import glob
+import base64
 from dotenv import load_dotenv
 load_dotenv()  # Load keys from .env file
 from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Query
@@ -9,6 +10,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from openai import OpenAI
 from pydantic import BaseModel
+# Google Gemini for speech-to-text
+from google import genai
 # ElevenLabs for dramatic genie voice
 from elevenlabs.client import ElevenLabs
 from elevenlabs import VoiceSettings
@@ -32,8 +35,102 @@ app.add_middleware(
 )
 
 # --- CLIENTS ---
-client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY", "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"))
-eleven_client = ElevenLabs(api_key=os.environ.get("ELEVEN_API_KEY", "sk_1f74ed8b0e8a3ea5bc233ce84444c8de2b15bbdd7edb9fb5"))
+# Dual-mode: try Gemini first, fall back to OpenAI
+GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "AIzaSyCP5K2A_Ba0vzkqKRCxGFob8ov2XH326Pk")
+OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY", "PLACEHOLDER")
+
+# Gemini via OpenAI-compatible endpoint
+gemini_openai_client = None
+gemini_native_client = None
+try:
+    gemini_openai_client = OpenAI(
+        api_key=GEMINI_API_KEY,
+        base_url="https://generativelanguage.googleapis.com/v1beta/openai/"
+    )
+    gemini_native_client = genai.Client(api_key=GEMINI_API_KEY)
+    print("\u2705 Gemini client initialized")
+except Exception as e:
+    print(f"\u26a0\ufe0f Gemini init failed: {e}")
+
+# OpenAI direct client
+openai_client = None
+if OPENAI_API_KEY != "PLACEHOLDER":
+    try:
+        openai_client = OpenAI(api_key=OPENAI_API_KEY)
+        print("\u2705 OpenAI client initialized")
+    except Exception as e:
+        print(f"\u26a0\ufe0f OpenAI init failed: {e}")
+else:
+    print("\u26a0\ufe0f OpenAI key not set, skipping")
+
+eleven_client = ElevenLabs(api_key=os.environ.get("ELEVEN_API_KEY", "f68b860b0e1b635287b7e1b4473ca997cc30bc6c31be60cbc57b4764557159da"))
+
+
+def chat_completion(messages, response_format=None):
+    """Try Gemini first, then OpenAI for chat completions."""
+    errors = []
+    # Try Gemini
+    if gemini_openai_client:
+        try:
+            kwargs = {"model": "gemini-2.0-flash", "messages": messages}
+            if response_format:
+                kwargs["response_format"] = response_format
+            response = gemini_openai_client.chat.completions.create(**kwargs)
+            print("\U0001f916 Used: Gemini")
+            return response
+        except Exception as e:
+            errors.append(f"Gemini: {e}")
+            print(f"\u26a0\ufe0f Gemini failed: {e}")
+    # Try OpenAI
+    if openai_client:
+        try:
+            kwargs = {"model": "gpt-4o", "messages": messages}
+            if response_format:
+                kwargs["response_format"] = response_format
+            response = openai_client.chat.completions.create(**kwargs)
+            print("\U0001f916 Used: OpenAI")
+            return response
+        except Exception as e:
+            errors.append(f"OpenAI: {e}")
+            print(f"\u26a0\ufe0f OpenAI failed: {e}")
+    raise Exception(f"All LLM providers failed: {'; '.join(errors)}")
+
+
+def transcribe_audio(filepath):
+    """Try Gemini STT first, then OpenAI Whisper."""
+    errors = []
+    # Try Gemini native STT
+    if gemini_native_client:
+        try:
+            gemini_file = gemini_native_client.files.upload(file=filepath)
+            stt_response = gemini_native_client.models.generate_content(
+                model="gemini-2.0-flash",
+                contents=[
+                    "Transcribe this audio exactly. Return ONLY the spoken text, nothing else.",
+                    gemini_file
+                ]
+            )
+            text = stt_response.text.strip()
+            print(f"\U0001f399\ufe0f STT (Gemini): {text}")
+            return text
+        except Exception as e:
+            errors.append(f"Gemini STT: {e}")
+            print(f"\u26a0\ufe0f Gemini STT failed: {e}")
+    # Try OpenAI Whisper
+    if openai_client:
+        try:
+            with open(filepath, "rb") as audio_file:
+                transcription = openai_client.audio.transcriptions.create(
+                    model="whisper-1",
+                    file=audio_file
+                )
+            text = transcription.text
+            print(f"\U0001f399\ufe0f STT (Whisper): {text}")
+            return text
+        except Exception as e:
+            errors.append(f"Whisper: {e}")
+            print(f"\u26a0\ufe0f Whisper STT failed: {e}")
+    raise Exception(f"All STT providers failed: {'; '.join(errors)}")
 
 # --- VOICE CONFIG ---
 GENIE_VOICE_ID = os.environ.get("ELEVEN_VOICE_ID", "n1PvBOwxb8X6m7tahp2h")
@@ -65,9 +162,11 @@ def generate_eleven_audio(text: str, filepath: str):
     except Exception as e:
         print(f"⚠️ ElevenLabs Error: {e}")
         try:
-            res = client.audio.speech.create(model="tts-1", voice="onyx", input=text)
-            res.stream_to_file(filepath)
-            return True
+            res = openai_client.audio.speech.create(model="tts-1", voice="onyx", input=text) if openai_client else None
+            if res:
+                res.stream_to_file(filepath)
+                return True
+            return False
         except Exception as e2:
             print(f"❌ Fallback failed: {e2}")
             return False
@@ -180,8 +279,7 @@ async def get_rules():
     hint_counts = {1: 0, 2: 0, 3: 0}
 
     try:
-        response = client.chat.completions.create(
-            model="gpt-4o",
+        response = chat_completion(
             messages=[
                 {"role": "system", "content": """
                 You are a cynical Genie game designer. Generate 3 unique laws for 3 doors.
@@ -303,21 +401,14 @@ async def process_wish(
         buffer.write(await file.read())
 
     try:
-        # 1. Transcribe the audio
-        with open(temp_filename, "rb") as audio_file:
-            transcription = client.audio.transcriptions.create(
-                model="whisper-1", 
-                file=audio_file
-            )
-        
-        user_wish = transcription.text
+        # 1. Transcribe the audio (Gemini → OpenAI Whisper fallback)
+        user_wish = transcribe_audio(temp_filename)
         print(f"User Wish for Door {door_id}: {user_wish}")
 
         # 2. Get Genie Judgment (uses dynamic door_rules from Unity)
         door_num = int(door_id) if str(door_id).isdigit() else 1
         strictness = "Be EXTRA strict and literal. Reject on any technicality." if door_num >= 2 else "Be strict; when in doubt, reject."
-        response = client.chat.completions.create(
-            model="gpt-4o",
+        response = chat_completion(
             messages=[
                 {"role": "system", "content": SYSTEM_PROMPT},
                 {"role": "user", "content": f"DOOR NUMBER: {door_num}. {strictness}\n\nCURRENT DOOR LAW (judge the wish against this only):\n{door_rules}\n\nPlayer's spoken wish: \"{user_wish}\"\n\nRespond with JSON. Remember: door_open true ONLY if the wish unambiguously satisfies the law. Otherwise give a wrong-but-close object and set door_open false with a clear rejection in congrats_voice."}
@@ -375,9 +466,15 @@ INTRO_TEMPLATE = (
 @app.get("/intro")
 def get_intro():
     """Generate the Genie's intro monologue, including Door 1's first (hard) clue"""
-    # Get Door 1's first clue (hard) from session
-    clue = "well, you'll just have to figure it out yourself!"
+    # MANDATORY: ensure rules are generated before intro so clue is always present
     doors = current_session.get("doors", [])
+    if not doors:
+        print("⚠️ /intro called before /get_rules — auto-generating rules...")
+        get_rules()  # Generate rules now
+        doors = current_session.get("doors", [])
+    
+    # Get Door 1's first clue (hard) — should always exist now
+    clue = "well, you'll just have to figure it out yourself!"
     if doors:
         clues = doors[0].get("clues", [])
         if clues:

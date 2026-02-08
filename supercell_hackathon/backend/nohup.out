@@ -1,0 +1,53 @@
+INFO:     Started server process [81820]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
+🗑️ Deleted cached: intro.mp3
+❌ Error: Error code: 401 - {'error': {'message': 'Incorrect API key provided: sk-proj-********************************************************************************************************************************************************wrwA. You can find your API key at https://platform.openai.com/account/api-keys.', 'type': 'invalid_request_error', 'code': 'invalid_api_key', 'param': None}, 'status': 401}
+INFO:     127.0.0.1:56869 - "GET /get_rules HTTP/1.1" 200 OK
+/Users/blam/Supercell_Hackathon/supercell_hackathon/supercell_hackathon/backend/main.py:69: DeprecationWarning: Due to a bug, this method doesn't actually stream the response content, `.with_streaming_response.method()` should be used instead
+  res.stream_to_file(filepath)
+🎙️ Generating Genie intro monologue...
+⚠️ ElevenLabs Error: headers: {'date': 'Sun, 08 Feb 2026 04:53:58 GMT', 'server': 'uvicorn', 'content-length': '171', 'content-type': 'application/json', 'access-control-allow-origin': '*', 'access-control-allow-headers': '*', 'access-control-allow-methods': 'POST, PATCH, OPTIONS, DELETE, GET, PUT', 'access-control-max-age': '600', 'strict-transport-security': 'max-age=1800;', 'x-trace-id': '7e139a21c5265f6039cfa95de6545798', 'x-region': 'us-central1', 'via': '1.1 google', 'alt-svc': 'h3=":443"; ma=2592000,h3-29=":443"; ma=2592000'}, status_code: 401, body: {'detail': {'status': 'quota_exceeded', 'message': 'This request exceeds your quota of 38130. You have 6 credits remaining, while 479 credits are required for this request.'}}
+✅ Intro audio generated
+INFO:     127.0.0.1:56869 - "GET /intro HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56869 - "GET /static/intro.mp3 HTTP/1.1" 200 OK
+User Wish for Door 1: Give me a ruby.
+🎙️ Generating Drop Voice (ElevenLabs)...
+⚠️ ElevenLabs Error: headers: {'date': 'Sun, 08 Feb 2026 04:54:41 GMT', 'server': 'uvicorn', 'content-length': '170', 'content-type': 'application/json', 'access-control-allow-origin': '*', 'access-control-allow-headers': '*', 'access-control-allow-methods': 'POST, PATCH, OPTIONS, DELETE, GET, PUT', 'access-control-max-age': '600', 'strict-transport-security': 'max-age=1800;', 'x-trace-id': '5f76c3c8e80f54540064909450c533dd', 'x-region': 'us-central1', 'via': '1.1 google', 'alt-svc': 'h3=":443"; ma=2592000,h3-29=":443"; ma=2592000'}, status_code: 401, body: {'detail': {'status': 'quota_exceeded', 'message': 'This request exceeds your quota of 38130. You have 6 credits remaining, while 33 credits are required for this request.'}}
+🎙️ Generating Verdict Voice (ElevenLabs)...
+⚠️ ElevenLabs Error: headers: {'date': 'Sun, 08 Feb 2026 04:54:42 GMT', 'server': 'uvicorn', 'content-length': '171', 'content-type': 'application/json', 'access-control-allow-origin': '*', 'access-control-allow-headers': '*', 'access-control-allow-methods': 'POST, PATCH, OPTIONS, DELETE, GET, PUT', 'access-control-max-age': '600', 'strict-transport-security': 'max-age=1800;', 'x-trace-id': 'c8080ea372c81ccb0064909450c5364f', 'x-region': 'us-central1', 'via': '1.1 google', 'alt-svc': 'h3=":443"; ma=2592000,h3-29=":443"; ma=2592000'}, status_code: 401, body: {'detail': {'status': 'quota_exceeded', 'message': 'This request exceeds your quota of 38130. You have 6 credits remaining, while 121 credits are required for this request.'}}
+❌ Fallback failed: Error code: 401 - {'error': {'message': 'Incorrect API key provided: sk-proj-********************************************************************************************************************************************************wrwA. You can find your API key at https://platform.openai.com/account/api-keys.', 'type': 'invalid_request_error', 'code': 'invalid_api_key', 'param': None}, 'status': 401}
+✅ Drop: /static/drop_20141914-8448-4cf7-bf4f-dd24233307f1.mp3
+✅ Congrats: /static/congrats_20141914-8448-4cf7-bf4f-dd24233307f1.mp3
+INFO:     127.0.0.1:56891 - "POST /process_wish HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56891 - "GET /static/drop_20141914-8448-4cf7-bf4f-dd24233307f1.mp3 HTTP/1.1" 200 OK
+User Wish for Door 1: How about a ruby?
+🎙️ Generating Drop Voice (ElevenLabs)...
+⚠️ ElevenLabs Error: headers: {'date': 'Sun, 08 Feb 2026 04:54:52 GMT', 'server': 'uvicorn', 'content-length': '170', 'content-type': 'application/json', 'access-control-allow-origin': '*', 'access-control-allow-headers': '*', 'access-control-allow-methods': 'POST, PATCH, OPTIONS, DELETE, GET, PUT', 'access-control-max-age': '600', 'strict-transport-security': 'max-age=1800;', 'x-trace-id': '1c31d2ce22c9e10dee0ce3118117dc9e', 'x-region': 'us-central1', 'via': '1.1 google', 'alt-svc': 'h3=":443"; ma=2592000,h3-29=":443"; ma=2592000'}, status_code: 401, body: {'detail': {'status': 'quota_exceeded', 'message': 'This request exceeds your quota of 38130. You have 6 credits remaining, while 44 credits are required for this request.'}}
+🎙️ Generating Verdict Voice (ElevenLabs)...
+⚠️ ElevenLabs Error: headers: {'date': 'Sun, 08 Feb 2026 04:54:53 GMT', 'server': 'uvicorn', 'content-length': '170', 'content-type': 'application/json', 'access-control-allow-origin': '*', 'access-control-allow-headers': '*', 'access-control-allow-methods': 'POST, PATCH, OPTIONS, DELETE, GET, PUT', 'access-control-max-age': '600', 'strict-transport-security': 'max-age=1800;', 'x-trace-id': '4b2282cbc130e50fee0ce3118117dfeb', 'x-region': 'us-central1', 'via': '1.1 google', 'alt-svc': 'h3=":443"; ma=2592000,h3-29=":443"; ma=2592000'}, status_code: 401, body: {'detail': {'status': 'quota_exceeded', 'message': 'This request exceeds your quota of 38130. You have 6 credits remaining, while 87 credits are required for this request.'}}
+✅ Drop: /static/drop_1be7e372-0384-464e-ba9d-e43aa3f7f650.mp3
+✅ Congrats: /static/congrats_1be7e372-0384-464e-ba9d-e43aa3f7f650.mp3
+INFO:     127.0.0.1:56896 - "POST /process_wish HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56896 - "GET /static/drop_1be7e372-0384-464e-ba9d-e43aa3f7f650.mp3 HTTP/1.1" 200 OK
+User Wish for Door 1: Give me a hint.
+❌ Error: Error code: 401 - {'error': {'message': 'Incorrect API key provided: sk-proj-********************************************************************************************************************************************************wrwA. You can find your API key at https://platform.openai.com/account/api-keys.', 'type': 'invalid_request_error', 'code': 'invalid_api_key', 'param': None}, 'status': 401}
+INFO:     127.0.0.1:56912 - "POST /process_wish HTTP/1.1" 500 Internal Server Error
+❌ Error: Error code: 401 - {'error': {'message': 'Incorrect API key provided: sk-proj-********************************************************************************************************************************************************wrwA. You can find your API key at https://platform.openai.com/account/api-keys.', 'type': 'invalid_request_error', 'code': 'invalid_api_key', 'param': None}, 'status': 401}
+INFO:     127.0.0.1:56918 - "POST /process_wish HTTP/1.1" 500 Internal Server Error
+❌ Error: Error code: 401 - {'error': {'message': 'Incorrect API key provided: sk-proj-********************************************************************************************************************************************************wrwA. You can find your API key at https://platform.openai.com/account/api-keys.', 'type': 'invalid_request_error', 'code': 'invalid_api_key', 'param': None}, 'status': 401}
+INFO:     127.0.0.1:56921 - "POST /process_wish HTTP/1.1" 500 Internal Server Error
+❌ Error: Error code: 401 - {'error': {'message': 'Incorrect API key provided: sk-proj-********************************************************************************************************************************************************wrwA. You can find your API key at https://platform.openai.com/account/api-keys.', 'type': 'invalid_request_error', 'code': 'invalid_api_key', 'param': None}, 'status': 401}
+INFO:     127.0.0.1:56921 - "POST /process_wish HTTP/1.1" 500 Internal Server Error
+🗑️ Deleted cached: congrats_20141914-8448-4cf7-bf4f-dd24233307f1.mp3
+🗑️ Deleted cached: drop_1be7e372-0384-464e-ba9d-e43aa3f7f650.mp3
+🗑️ Deleted cached: drop_20141914-8448-4cf7-bf4f-dd24233307f1.mp3
+🗑️ Deleted cached: intro.mp3
+🗑️ Deleted cached: congrats_1be7e372-0384-464e-ba9d-e43aa3f7f650.mp3
+❌ Error: Error code: 401 - {'error': {'message': 'Incorrect API key provided: sk-proj-********************************************************************************************************************************************************wrwA. You can find your API key at https://platform.openai.com/account/api-keys.', 'type': 'invalid_request_error', 'code': 'invalid_api_key', 'param': None}, 'status': 401}
+INFO:     127.0.0.1:56967 - "GET /get_rules HTTP/1.1" 200 OK
+🎙️ Generating Genie intro monologue...
+⚠️ ElevenLabs Error: headers: {'date': 'Sun, 08 Feb 2026 04:57:46 GMT', 'server': 'uvicorn', 'content-length': '171', 'content-type': 'application/json', 'access-control-allow-origin': '*', 'access-control-allow-headers': '*', 'access-control-allow-methods': 'POST, PATCH, OPTIONS, DELETE, GET, PUT', 'access-control-max-age': '600', 'strict-transport-security': 'max-age=1800;', 'x-trace-id': 'eadc387e3325c624c8544b82db4c3d38', 'x-region': 'us-central1', 'via': '1.1 google', 'alt-svc': 'h3=":443"; ma=2592000,h3-29=":443"; ma=2592000'}, status_code: 401, body: {'detail': {'status': 'quota_exceeded', 'message': 'This request exceeds your quota of 38130. You have 6 credits remaining, while 479 credits are required for this request.'}}
+❌ Fallback failed: Error code: 401 - {'error': {'message': 'Incorrect API key provided: sk-proj-********************************************************************************************************************************************************wrwA. You can find your API key at https://platform.openai.com/account/api-keys.', 'type': 'invalid_request_error', 'code': 'invalid_api_key', 'param': None}, 'status': 401}
+INFO:     127.0.0.1:56967 - "GET /intro HTTP/1.1" 500 Internal Server Error

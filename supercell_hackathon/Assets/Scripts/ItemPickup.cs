@@ -17,10 +17,10 @@ public class ItemPickup : MonoBehaviour
     public bool isPickupable = true;  // false after being used on a door
 
     [Header("Float Settings")]
-    public float floatHeight = -0.3f;     // Y offset relative to camera
-    public float floatDistance = 1.2f;    // Distance in front of camera
-    public float followSpeed = 8f;       // Lerp speed
-    public float bobAmplitude = 0.05f;   // Gentle bob
+    public float floatHeight = -0.15f;     // Y offset relative to camera (slightly below eye level)
+    public float floatDistance = 1.8f;      // Distance in front of camera (far enough to see clearly)
+    public float followSpeed = 10f;        // Lerp speed (snappy following)
+    public float bobAmplitude = 0.04f;     // Gentle bob
     public float bobFrequency = 2f;
 
     private Transform playerCamera;
@@ -39,13 +39,16 @@ public class ItemPickup : MonoBehaviour
         renderers = GetComponentsInChildren<Renderer>();
     }
 
-    void Update()
+    void LateUpdate()
     {
         if (!isHeld) return;
         if (playerCamera == null)
         {
-            playerCamera = Camera.main?.transform;
-            if (playerCamera == null) return;
+            // Try to find camera — use Camera.main first, fallback to any camera
+            Camera cam = Camera.main;
+            if (cam == null) cam = Object.FindAnyObjectByType<Camera>();
+            if (cam == null) return;
+            playerCamera = cam.transform;
         }
 
         // Calculate target position: in front of the player's view, slightly below eye level
@@ -59,6 +62,15 @@ public class ItemPickup : MonoBehaviour
         // Smoothly move toward target
         transform.position = Vector3.Lerp(transform.position, targetPos, Time.deltaTime * followSpeed);
 
+        // Face the player (so you always see the front of the object)
+        Vector3 lookDir = playerCamera.position - transform.position;
+        lookDir.y = 0; // Keep upright
+        if (lookDir.sqrMagnitude > 0.01f)
+        {
+            Quaternion targetRot = Quaternion.LookRotation(-lookDir, Vector3.up);
+            transform.rotation = Quaternion.Slerp(transform.rotation, targetRot, Time.deltaTime * 5f);
+        }
+
         // Slowly rotate for visual interest
         transform.Rotate(Vector3.up, 30f * Time.deltaTime, Space.World);
     }
@@ -69,7 +81,11 @@ public class ItemPickup : MonoBehaviour
     public void Pickup()
     {
         isHeld = true;
-        playerCamera = Camera.main?.transform;
+
+        // Find the camera now
+        Camera cam = Camera.main;
+        if (cam == null) cam = Object.FindAnyObjectByType<Camera>();
+        if (cam != null) playerCamera = cam.transform;
 
         // Disable physics so it floats
         if (rb != null)
@@ -83,11 +99,19 @@ public class ItemPickup : MonoBehaviour
         foreach (var col in colliders)
             col.enabled = false;
 
+        // Immediately snap to a position in front of the player (no lerp delay)
+        if (playerCamera != null)
+        {
+            transform.position = playerCamera.position
+                + playerCamera.forward * floatDistance
+                + playerCamera.up * floatHeight;
+        }
+
         Debug.Log($"[ItemPickup] 🤚 Picked up: {gameObject.name}");
     }
 
     /// <summary>
-    /// Called when the player drops this item (wrong answer, or picked up a different one)
+    /// Called when the player drops this item
     /// </summary>
     public void Drop()
     {
