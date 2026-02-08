@@ -58,6 +58,25 @@ public class GenieClient : MonoBehaviour
     private string micDevice;
     private bool isRequestingHint = false;
 
+    // VR controller button state tracking (for edge detection)
+    private bool vrXButtonWasDown = false;  // Left controller X button
+    private bool vrBButtonWasDown = false;  // Right controller B button
+    private bool vrAButtonWasDown = false;  // Right controller A button
+
+    // --- Pickup / Door interaction state ---
+    private ItemPickup heldItem = null;
+    private ItemPickup nearestItem = null;
+    private bool isNearDoor = false;
+    private const float PICKUP_RANGE = 4.0f;
+    private const float DOOR_RANGE = 5.0f;
+    private Transform cachedPlayerCam = null;
+    private float lastProximityLog = 0f;
+
+    // --- Auto-created Interaction Prompt UI ---
+    private TMPro.TextMeshProUGUI interactionPrompt;
+    private TMPro.TextMeshProUGUI controlsHUD;
+    private Canvas promptCanvas;
+
     // --- Session state: door rules from backend ---
     private DoorRule[] doorRules;
     public bool rulesLoaded { get; private set; } = false;
@@ -121,6 +140,91 @@ public class GenieClient : MonoBehaviour
             successSFX = Resources.Load<AudioClip>("success_chime");
         if (failSFX == null)
             failSFX = Resources.Load<AudioClip>("fail_buzzer");
+
+        // Auto-create interaction prompt UI
+        CreateInteractionUI();
+    }
+
+    void CreateInteractionUI()
+    {
+        // Canvas
+        GameObject canvasObj = new GameObject("InteractionCanvas");
+        promptCanvas = canvasObj.AddComponent<Canvas>();
+        promptCanvas.renderMode = RenderMode.ScreenSpaceOverlay;
+        promptCanvas.sortingOrder = 100;
+
+        var scaler = canvasObj.AddComponent<UnityEngine.UI.CanvasScaler>();
+        scaler.uiScaleMode = UnityEngine.UI.CanvasScaler.ScaleMode.ScaleWithScreenSize;
+        scaler.referenceResolution = new Vector2(1920, 1080);
+        canvasObj.AddComponent<UnityEngine.UI.GraphicRaycaster>();
+
+        // --- Centered interaction prompt (big, visible) ---
+        GameObject promptObj = new GameObject("InteractionPrompt");
+        promptObj.transform.SetParent(canvasObj.transform, false);
+
+        var promptRect = promptObj.AddComponent<RectTransform>();
+        promptRect.anchorMin = new Vector2(0.5f, 0.3f);
+        promptRect.anchorMax = new Vector2(0.5f, 0.3f);
+        promptRect.pivot = new Vector2(0.5f, 0.5f);
+        promptRect.anchoredPosition = Vector2.zero;
+        promptRect.sizeDelta = new Vector2(500, 60);
+
+        // Background
+        var bgPanel = promptObj.AddComponent<UnityEngine.UI.Image>();
+        bgPanel.color = new Color(0, 0, 0, 0.7f);
+
+        // Text
+        GameObject textObj = new GameObject("PromptText");
+        textObj.transform.SetParent(promptObj.transform, false);
+        var textRect = textObj.AddComponent<RectTransform>();
+        textRect.anchorMin = Vector2.zero;
+        textRect.anchorMax = Vector2.one;
+        textRect.offsetMin = new Vector2(15, 5);
+        textRect.offsetMax = new Vector2(-15, -5);
+
+        interactionPrompt = textObj.AddComponent<TMPro.TextMeshProUGUI>();
+        interactionPrompt.fontSize = 22;
+        interactionPrompt.color = Color.white;
+        interactionPrompt.alignment = TMPro.TextAlignmentOptions.Center;
+        interactionPrompt.enableAutoSizing = false;
+        promptObj.SetActive(false); // Hidden by default
+
+        // --- Top-left controls HUD ---
+        GameObject hudObj = new GameObject("ControlsHUD");
+        hudObj.transform.SetParent(canvasObj.transform, false);
+
+        var hudRect = hudObj.AddComponent<RectTransform>();
+        hudRect.anchorMin = new Vector2(0, 1);
+        hudRect.anchorMax = new Vector2(0, 1);
+        hudRect.pivot = new Vector2(0, 1);
+        hudRect.anchoredPosition = new Vector2(20, -20);
+        hudRect.sizeDelta = new Vector2(260, 120);
+
+        var hudBg = hudObj.AddComponent<UnityEngine.UI.Image>();
+        hudBg.color = new Color(0, 0, 0, 0.5f);
+
+        GameObject hudTextObj = new GameObject("HUDText");
+        hudTextObj.transform.SetParent(hudObj.transform, false);
+        var hudTextRect = hudTextObj.AddComponent<RectTransform>();
+        hudTextRect.anchorMin = Vector2.zero;
+        hudTextRect.anchorMax = Vector2.one;
+        hudTextRect.offsetMin = new Vector2(10, 5);
+        hudTextRect.offsetMax = new Vector2(-10, -5);
+
+        controlsHUD = hudTextObj.AddComponent<TMPro.TextMeshProUGUI>();
+        controlsHUD.fontSize = 15;
+        controlsHUD.color = Color.white;
+        controlsHUD.alignment = TMPro.TextAlignmentOptions.TopLeft;
+        controlsHUD.enableAutoSizing = false;
+        controlsHUD.lineSpacing = 6;
+
+        bool isVR = UnityEngine.XR.XRSettings.isDeviceActive;
+        if (isVR)
+            controlsHUD.text = "<b>CONTROLS</b>\n<color=#FFD700>[X]</color> Hold to Wish\n<color=#FFD700>[A]</color> Pick Up / Use\n<color=#FFD700>[B]</color> Hint";
+        else
+            controlsHUD.text = "<b>CONTROLS</b>\n<color=#FFD700>[V]</color> Hold to Wish\n<color=#FFD700>[E]</color> Pick Up / Use\n<color=#FFD700>[H]</color> Hint";
+
+        Debug.Log("[GenieClient] ✅ Interaction UI created");
     }
 
     // =====================================================
@@ -170,34 +274,103 @@ public class GenieClient : MonoBehaviour
 
     void Update()
     {
+        // === KEYBOARD INPUT (Desktop / Editor) ===
         var keyboard = Keyboard.current;
-        if (keyboard == null) return;
+        bool keyboardRecordPressed = keyboard != null && keyboard.vKey.wasPressedThisFrame;
+        bool keyboardRecordReleased = keyboard != null && keyboard.vKey.wasReleasedThisFrame;
+        bool keyboardHintPressed = keyboard != null && keyboard.hKey.wasPressedThisFrame;
+        bool keyboardDebugPressed = keyboard != null && keyboard.fKey.wasPressedThisFrame;
 
-        // Hold V to record a wish
-        if (keyboard.vKey.wasPressedThisFrame && !isRecording)
+        // === VR CONTROLLER INPUT (Meta Quest) ===
+        bool vrRecordPressed = false;
+        bool vrRecordReleased = false;
+        bool vrHintPressed = false;
+
+        // Check left controller X button (primaryButton) for push-to-talk
+        UnityEngine.XR.InputDevice leftHand = default;
+        var leftHandDevices = new System.Collections.Generic.List<UnityEngine.XR.InputDevice>();
+        UnityEngine.XR.InputDevices.GetDevicesAtXRNode(UnityEngine.XR.XRNode.LeftHand, leftHandDevices);
+        if (leftHandDevices.Count > 0)
+        {
+            leftHand = leftHandDevices[0];
+            bool xButtonDown = false;
+            if (leftHand.TryGetFeatureValue(UnityEngine.XR.CommonUsages.primaryButton, out xButtonDown))
+            {
+                if (xButtonDown && !vrXButtonWasDown)
+                    vrRecordPressed = true;     // Just pressed
+                if (!xButtonDown && vrXButtonWasDown)
+                    vrRecordReleased = true;    // Just released
+                vrXButtonWasDown = xButtonDown;
+            }
+        }
+
+        // Check right controller B button (primaryButton) for hints
+        var rightHandDevices = new System.Collections.Generic.List<UnityEngine.XR.InputDevice>();
+        UnityEngine.XR.InputDevices.GetDevicesAtXRNode(UnityEngine.XR.XRNode.RightHand, rightHandDevices);
+        if (rightHandDevices.Count > 0)
+        {
+            bool bButtonDown = false;
+            if (rightHandDevices[0].TryGetFeatureValue(UnityEngine.XR.CommonUsages.primaryButton, out bButtonDown))
+            {
+                if (bButtonDown && !vrBButtonWasDown)
+                    vrHintPressed = true;
+                vrBButtonWasDown = bButtonDown;
+            }
+        }
+
+        // Check right controller A button (secondaryButton) for pickup/use
+        bool vrActionPressed = false;
+        if (rightHandDevices.Count > 0)
+        {
+            bool aButtonDown = false;
+            if (rightHandDevices[0].TryGetFeatureValue(UnityEngine.XR.CommonUsages.secondaryButton, out aButtonDown))
+            {
+                if (aButtonDown && !vrAButtonWasDown)
+                    vrActionPressed = true;
+                vrAButtonWasDown = aButtonDown;
+            }
+        }
+
+        bool keyboardActionPressed = keyboard != null && keyboard.eKey.wasPressedThisFrame;
+
+        // === PROXIMITY DETECTION ===
+        UpdateProximity();
+
+        // === COMBINED INPUT ===
+        // Hold to record (V key or X button)
+        if ((keyboardRecordPressed || vrRecordPressed) && !isRecording)
         {
             StartRecording();
         }
 
-        if (keyboard.vKey.wasReleasedThisFrame && isRecording)
+        if ((keyboardRecordReleased || vrRecordReleased) && isRecording)
         {
             StopRecordingAndSend();
         }
 
-        // Press H to request a progressive hint
-        if (keyboard.hKey.wasPressedThisFrame && !isRequestingHint)
+        // Press E or A button for pickup / door interaction
+        if (keyboardActionPressed || vrActionPressed)
+        {
+            HandleActionButton();
+        }
+
+        // Press H or B button to request a progressive hint
+        if ((keyboardHintPressed || vrHintPressed) && !isRequestingHint)
         {
             StartCoroutine(RequestHint());
         }
 
         // Press F to debug-spawn a random item from the ACTIVE room's pipe only
-        if (keyboard.fKey.wasPressedThisFrame)
+        if (keyboardDebugPressed)
         {
             PipeSpawner pipe = ActivePipeSpawner;
             if (pipe != null)
             {
                 pipe.SpawnRandomItem();
                 Debug.Log($"[GenieClient] 🧪 Debug spawn from pipe for Door {currentDoorId}");
+
+                // Auto-add ItemPickup to debug-spawned objects so they're pickupable
+                StartCoroutine(AddItemPickupToNewObjects());
             }
             else
             {
@@ -205,6 +378,270 @@ public class GenieClient : MonoBehaviour
             }
         }
     }
+
+    // Ensure all spawned objects eventually get ItemPickup (safety net)
+    System.Collections.IEnumerator AddItemPickupToNewObjects()
+    {
+        yield return new WaitForSeconds(0.5f); // Wait for physics to settle
+        // Find any Rigidbody without ItemPickup and add one
+        foreach (var rb in FindObjectsOfType<Rigidbody>())
+        {
+            if (rb.GetComponent<ItemPickup>() == null && rb.GetComponent<PipeSpawner>() == null
+                && rb.GetComponent<CharacterController>() == null)
+            {
+                var pickup = rb.gameObject.AddComponent<ItemPickup>();
+                Debug.Log($"[GenieClient] 🔧 Auto-added ItemPickup to '{rb.gameObject.name}'");
+            }
+        }
+    }
+
+    // =====================================================
+    // PROXIMITY DETECTION — find nearby items and doors
+    // =====================================================
+    void UpdateProximity()
+    {
+        // Robust camera finding — Camera.main requires 'MainCamera' tag!
+        if (cachedPlayerCam == null || !cachedPlayerCam.gameObject.activeInHierarchy)
+        {
+            Camera mainCam = Camera.main;
+            if (mainCam == null)
+            {
+                // Fallback: find any active camera in the scene
+                mainCam = FindObjectOfType<Camera>();
+                if (mainCam != null)
+                    Debug.LogWarning($"[GenieClient] Camera.main is null! Using fallback camera: '{mainCam.gameObject.name}'. Consider adding 'MainCamera' tag.");
+            }
+            if (mainCam == null)
+            {
+                if (Time.time - lastProximityLog > 5f)
+                {
+                    Debug.LogError("[GenieClient] ❌ No camera found in scene! Pickup detection disabled.");
+                    lastProximityLog = Time.time;
+                }
+                return;
+            }
+            cachedPlayerCam = mainCam.transform;
+        }
+
+        // Use XZ distance (ignore height) for ground-level items
+        Vector3 playerXZ = new Vector3(cachedPlayerCam.position.x, 0, cachedPlayerCam.position.z);
+
+        // Find nearest pickupable item
+        ItemPickup closest = null;
+        float closestDist = PICKUP_RANGE;
+        int totalItems = 0;
+        int pickupableItems = 0;
+        float nearestAnyDist = float.MaxValue;
+
+        foreach (var item in FindObjectsOfType<ItemPickup>())
+        {
+            totalItems++;
+            if (item == null) continue;
+            if (item.isHeld || !item.isPickupable) continue;
+            pickupableItems++;
+
+            // XZ distance so objects on the floor are reachable from standing height
+            Vector3 itemXZ = new Vector3(item.transform.position.x, 0, item.transform.position.z);
+            float dist = Vector3.Distance(playerXZ, itemXZ);
+
+            if (dist < nearestAnyDist) nearestAnyDist = dist;
+
+            if (dist < closestDist)
+            {
+                closestDist = dist;
+                closest = item;
+            }
+        }
+
+        // Periodic debug logging (every 2 seconds)
+        if (Time.time - lastProximityLog > 2f && totalItems > 0)
+        {
+            Debug.Log($"[GenieClient] 📍 Proximity: {totalItems} ItemPickup found, {pickupableItems} pickupable, nearest={nearestAnyDist:F1}m (range={PICKUP_RANGE}m), cam='{cachedPlayerCam.gameObject.name}' pos={cachedPlayerCam.position}");
+            lastProximityLog = Time.time;
+        }
+
+        // Update highlight on nearest item
+        if (nearestItem != null && nearestItem != closest)
+            nearestItem.SetHighlight(false);
+
+        ItemPickup prevNearest = nearestItem;
+        nearestItem = closest;
+
+        if (nearestItem != null)
+        {
+            nearestItem.SetHighlight(true);
+            if (prevNearest != nearestItem)
+                Debug.Log($"[GenieClient] 👁️ Near item: '{nearestItem.gameObject.name}' (dist={closestDist:F1}m)");
+        }
+
+        // Check if near a door (also XZ distance)
+        isNearDoor = false;
+        int doorIndex = currentDoorId - 1;
+        if (doors != null && doorIndex >= 0 && doorIndex < doors.Length && doors[doorIndex] != null)
+        {
+            Vector3 doorXZ = new Vector3(doors[doorIndex].transform.position.x, 0, doors[doorIndex].transform.position.z);
+            float doorDist = Vector3.Distance(playerXZ, doorXZ);
+            isNearDoor = doorDist < DOOR_RANGE;
+        }
+
+        // Update interaction prompt
+        UpdateInteractionPrompt();
+    }
+
+    void UpdateInteractionPrompt()
+    {
+        if (interactionPrompt == null) return;
+
+        bool isVR = UnityEngine.XR.XRSettings.isDeviceActive;
+        string key = isVR ? "A" : "E";
+        GameObject promptPanel = interactionPrompt.transform.parent.gameObject;
+
+        if (heldItem != null && isNearDoor)
+        {
+            promptPanel.SetActive(true);
+            interactionPrompt.text = $"Press <color=#00FF88><b>[{key}]</b></color> to try <color=#FFD700>{heldItem.gameObject.name}</color> on the door";
+        }
+        else if (heldItem != null)
+        {
+            promptPanel.SetActive(true);
+            interactionPrompt.text = $"Press <color=#FFD700><b>[{key}]</b></color> to drop <color=#FFD700>{heldItem.gameObject.name}</color>";
+        }
+        else if (nearestItem != null)
+        {
+            promptPanel.SetActive(true);
+            interactionPrompt.text = $"Press <color=#00FF88><b>[{key}]</b></color> to pick up <color=#FFD700>{nearestItem.gameObject.name}</color>";
+        }
+        else
+        {
+            promptPanel.SetActive(false);
+        }
+    }
+
+    // =====================================================
+    // ACTION BUTTON — pickup item or use on door
+    // =====================================================
+    void HandleActionButton()
+    {
+        Debug.Log($"[GenieClient] 🎮 Action pressed! heldItem={heldItem?.gameObject.name ?? "none"}, nearestItem={nearestItem?.gameObject.name ?? "none"}, nearDoor={isNearDoor}");
+
+        // Priority 1: If holding an item and near a door → try on door
+        if (heldItem != null && isNearDoor)
+        {
+            Debug.Log($"[GenieClient] 🚪 Trying '{heldItem.gameObject.name}' on door!");
+            TryObjectOnDoor();
+            return;
+        }
+
+        // Priority 2: If holding an item but NOT near door → drop it
+        if (heldItem != null)
+        {
+            Debug.Log($"[GenieClient] 📦 Dropping '{heldItem.gameObject.name}'");
+            heldItem.Drop();
+            heldItem = null;
+            return;
+        }
+
+        // Priority 3: If near a pickupable item → pick it up
+        if (nearestItem != null)
+        {
+            heldItem = nearestItem;
+            heldItem.Pickup();
+            Debug.Log($"[GenieClient] 🤚 Picked up: '{heldItem.gameObject.name}'");
+            nearestItem = null;
+            return;
+        }
+
+        Debug.Log("[GenieClient] ❌ Action pressed but nothing nearby to interact with");
+    }
+
+    // =====================================================
+    // TRY OBJECT ON DOOR — play stored verdict
+    // =====================================================
+    void TryObjectOnDoor()
+    {
+        if (heldItem == null) return;
+
+        Debug.Log($"[GenieClient] 🚪 Trying '{heldItem.gameObject.name}' on Door {currentDoorId}");
+
+        if (heldItem.doorOpen)
+        {
+            // SUCCESS!
+            StartCoroutine(PlayDoorSuccess(heldItem));
+        }
+        else
+        {
+            // WRONG — play rejection
+            StartCoroutine(PlayDoorFail(heldItem));
+        }
+    }
+
+    IEnumerator PlayDoorSuccess(ItemPickup item)
+    {
+        // Play success chime
+        if (successSFX != null && genieAudioSource != null)
+            genieAudioSource.PlayOneShot(successSFX, 0.8f);
+
+        // Play congrats voice
+        if (!string.IsNullOrEmpty(item.audioUrlCongrats))
+        {
+            ShowSubtitle(item.congratsVoice);
+            yield return new WaitForSeconds(0.5f);
+            StartCoroutine(PlayAudioFromUrl(serverUrl + item.audioUrlCongrats));
+        }
+
+        yield return new WaitForSeconds(1f);
+
+        // Destroy the held item
+        Destroy(item.gameObject);
+        heldItem = null;
+
+        // Open the door
+        int doorIndex = currentDoorId - 1;
+        if (doors != null && doorIndex >= 0 && doorIndex < doors.Length && doors[doorIndex] != null)
+        {
+            StartCoroutine(AnimateDoorOpen(doors[doorIndex]));
+            Debug.Log($"[GenieClient] 🚪 Door {currentDoorId} OPENED!");
+        }
+
+        // Wait for congrats to finish, then advance
+        yield return new WaitForSeconds(5f);
+
+        if (currentDoorId < 3)
+        {
+            currentDoorId++;
+            Debug.Log($"[GenieClient] ➡️ Advanced to Door {currentDoorId}");
+            StartCoroutine(PlayRoomTransition(currentDoorId));
+        }
+        else
+        {
+            Debug.Log("[GenieClient] 🏆 ALL DOORS OPENED! Player wins!");
+        }
+    }
+
+    IEnumerator PlayDoorFail(ItemPickup item)
+    {
+        // Play fail buzzer
+        if (failSFX != null && genieAudioSource != null)
+            genieAudioSource.PlayOneShot(failSFX, 0.7f);
+
+        // Play rejection voice
+        if (!string.IsNullOrEmpty(item.audioUrlCongrats))
+        {
+            ShowSubtitle(item.congratsVoice);
+            yield return new WaitForSeconds(0.5f);
+            StartCoroutine(PlayAudioFromUrl(serverUrl + item.audioUrlCongrats));
+        }
+
+        // Drop the item back to the ground
+        item.Drop();
+        item.isPickupable = true; // Can try again or pick up another
+        heldItem = null;
+    }
+
+    // --- Public accessors for InputOverlay ---
+    public ItemPickup GetHeldItem() => heldItem;
+    public bool IsNearDoor() => isNearDoor;
+    public bool IsNearPickupableItem() => nearestItem != null;
 
     void StartRecording()
     {
@@ -322,89 +759,57 @@ public class GenieClient : MonoBehaviour
                     {
                         AddFloatingLabel(spawned, response.display_name);
                     }
+
+                    // === FIX: Prevent objects falling through floor ===
+                    Rigidbody rb = spawned.GetComponent<Rigidbody>();
+                    if (rb == null) rb = spawned.GetComponentInChildren<Rigidbody>();
+                    if (rb != null)
+                    {
+                        rb.collisionDetectionMode = CollisionDetectionMode.ContinuousDynamic;
+                        rb.interpolation = RigidbodyInterpolation.Interpolate;
+                    }
+                    // Ensure colliders exist and are properly sized
+                    if (spawned.GetComponentInChildren<Collider>() == null)
+                    {
+                        BoxCollider bc = spawned.AddComponent<BoxCollider>();
+                        Renderer[] renderers = spawned.GetComponentsInChildren<Renderer>();
+                        if (renderers.Length > 0)
+                        {
+                            Bounds bounds = renderers[0].bounds;
+                            for (int i = 1; i < renderers.Length; i++)
+                                bounds.Encapsulate(renderers[i].bounds);
+                            bc.center = spawned.transform.InverseTransformPoint(bounds.center);
+                            bc.size = bounds.size;
+                        }
+                    }
+                    // Add floor safety net: clamp Y position so it can't go below floor
+                    var safety = spawned.AddComponent<FloorSafety>();
+
+                    // === STORE VERDICT on ItemPickup (deferred until door interaction) ===
+                    ItemPickup pickup = spawned.AddComponent<ItemPickup>();
+                    pickup.doorOpen = response.door_open;
+                    pickup.congratsVoice = response.congrats_voice;
+                    pickup.audioUrlCongrats = response.audio_url_congrats;
+                    pickup.dropVoice = response.drop_voice;
                 }
             }
 
-            // 2. Play drop voice audio with subtitle
+            // 2. Play drop voice audio with subtitle (plays immediately — just the sarcastic object reaction)
             if (!string.IsNullOrEmpty(response.audio_url_drop))
             {
                 ShowSubtitle(response.drop_voice);
                 StartCoroutine(PlayAudioFromUrl(serverUrl + response.audio_url_drop));
             }
 
-            // 3. Handle door opening (after a delay for dramatic effect)
-            if (response.door_open)
-            {
-                StartCoroutine(OpenDoorAfterDelay(response));
-            }
-            else
-            {
-                // Wrong answer — play fail buzzer after drop voice finishes
-                StartCoroutine(PlayFailAfterDelay(response));
-            }
+            // 3. Verdict is DEFERRED — no success/fail here!
+            // The player must pick up the object and try it on the door.
+            // See TryObjectOnDoor() / PlayDoorSuccess() / PlayDoorFail()
         }
     }
 
-    IEnumerator PlayFailAfterDelay(GenieResponse response)
-    {
-        // Wait for drop voice to finish
-        yield return new WaitForSeconds(4f);
-
-        // Play fail buzzer
-        if (failSFX != null && genieAudioSource != null)
-            genieAudioSource.PlayOneShot(failSFX, 0.7f);
-
-        // Play congrats voice (which is actually the rejection speech)
-        if (!string.IsNullOrEmpty(response.audio_url_congrats))
-        {
-            ShowSubtitle(response.congrats_voice);
-            yield return new WaitForSeconds(0.5f);
-            StartCoroutine(PlayAudioFromUrl(serverUrl + response.audio_url_congrats));
-        }
-    }
-
-    IEnumerator OpenDoorAfterDelay(GenieResponse response)
-    {
-        // Wait for drop voice to finish, then play congrats
-        yield return new WaitForSeconds(4f);
-
-        // Play success chime
-        if (successSFX != null && genieAudioSource != null)
-            genieAudioSource.PlayOneShot(successSFX, 0.8f);
-
-        // Play congrats voice with subtitle
-        if (!string.IsNullOrEmpty(response.audio_url_congrats))
-        {
-            ShowSubtitle(response.congrats_voice);
-            yield return new WaitForSeconds(0.5f);
-            StartCoroutine(PlayAudioFromUrl(serverUrl + response.audio_url_congrats));
-        }
-
-        // Open the door
-        int doorIndex = currentDoorId - 1;
-        if (doors != null && doorIndex >= 0 && doorIndex < doors.Length && doors[doorIndex] != null)
-        {
-            StartCoroutine(AnimateDoorOpen(doors[doorIndex]));
-            Debug.Log($"[GenieClient] 🚪 Door {currentDoorId} OPENED!");
-        }
-
-        // Wait for congrats to finish, then advance to next room
-        yield return new WaitForSeconds(5f);
-
-        // Advance to next door
-        if (currentDoorId < 3)
-        {
-            currentDoorId++;
-            Debug.Log($"[GenieClient] ➡️ Advanced to Door {currentDoorId}");
-
-            // Fetch and play the transition voice with the next clue
-            StartCoroutine(PlayRoomTransition(currentDoorId));
-        }
-        else
-        {
-            Debug.Log("[GenieClient] 🏆 ALL DOORS OPENED! Player wins!");
-        }
-    }
+    // NOTE: PlayFailAfterDelay and OpenDoorAfterDelay have been replaced by
+    // PlayDoorFail() and PlayDoorSuccess() — triggered via TryObjectOnDoor()
+    // when the player physically uses an object on the door.
 
     // =====================================================
     // ROOM TRANSITION — play congrats + next clue

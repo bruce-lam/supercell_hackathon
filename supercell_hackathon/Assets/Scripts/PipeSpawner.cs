@@ -246,10 +246,13 @@ public class PipeSpawner : MonoBehaviour
             }
         }
 
-        // Apply physics
+        // Apply physics with robust collision detection to prevent floor clipping
         Rigidbody rb = item.GetComponent<Rigidbody>();
         if (rb == null) rb = item.AddComponent<Rigidbody>();
 
+        rb.collisionDetectionMode = CollisionDetectionMode.ContinuousDynamic;
+        rb.interpolation = RigidbodyInterpolation.Interpolate;
+        rb.solverIterations = 10;
         rb.linearVelocity = Vector3.down * dropForce;
 
         if (addRandomSpin)
@@ -257,11 +260,8 @@ public class PipeSpawner : MonoBehaviour
             rb.angularVelocity = Random.insideUnitSphere * 3f;
         }
 
-        // Auto-destroy after time
-        if (destroyAfterSeconds > 0)
-        {
-            Destroy(item, destroyAfterSeconds);
-        }
+        // NO auto-destroy — objects persist for player pickup mechanic
+        // (GenieClient destroys them after successful door interaction)
 
         Debug.Log($"[PipeSpawner] Spawned: {prefab.name}");
         return item;
