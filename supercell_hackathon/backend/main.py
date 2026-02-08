@@ -99,7 +99,7 @@ OUTPUT FORMAT (JSON ONLY):
 """
 @app.get("/get_rules")
 async def get_rules():
-    """Generates 3 Laws and 3 Mystical Clues for the player."""
+    """Generates 3 Laws and 3 progressive clues for each door."""
     try:
         response = client.chat.completions.create(
             model="gpt-4o",
@@ -110,28 +110,52 @@ async def get_rules():
                 FORMAT: Return a JSON object with a list called 'doors'.
                 Each door must have:
                 1. 'law': A strict physical requirement (e.g., 'Must be made of gold').
-                2. 'clue': A cryptic, cynical hint for the player (e.g., 'Only that which glitters like the sun's greed shall pass').
-                
+                2. 'clues': A list of exactly 3 strings ranging from Hard to Easy.
+                   - Index 0 (Hard): Cryptic, atmospheric, poetic.
+                   - Index 1 (Medium): A helpful hint about the material or shape.
+                   - Index 2 (Easy): A literal, sarcastic giveaway (almost telling them exactly what to spawn).
+
                 GUIDELINES:
                 - Laws must be physical (color, material, weight, or shape).
-                - Clues should be atmospheric and 'Genie-like' but helpful.
+                - The Genie's tone should remain bored and unimpressed in all clues.
                 """},
-                {"role": "user", "content": "Generate 3 laws and clues."}
+                {"role": "user", "content": "Generate 3 laws with progressive clues."}
             ],
             response_format={"type": "json_object"}
         )
         return json.loads(response.choices[0].message.content)
     except Exception as e:
         print(f"❌ Error: {e}")
-        # Robust Fallback
+        # Robust Fallback with 3 Clue Levels
         return {
             "doors": [
-                {"law": "Must be red", "clue": "Bring me the color of a fresh wound... or a strawberry."},
-                {"law": "Must be metal", "clue": "Only the cold, unfeeling iron of the earth opens this path."},
-                {"law": "Must be round", "clue": "I seek an object with no beginning and no end."}
+                {
+                    "law": "Must be red",
+                    "clues": [
+                        "Bring me the color of a fresh wound... or perhaps a dying star.", # Hard
+                        "I seek something the color of a strawberry or a stop sign.",      # Medium
+                        "Just make it RED. It's not that hard, mortal."                    # Easy
+                    ]
+                },
+                {
+                    "law": "Must be metal",
+                    "clues": [
+                        "Only the cold, unfeeling bones of the earth shall pass.",
+                        "It must be forged in fire and ring when struck.",
+                        "I want metal. Iron, steel, gold... stop overthinking it."
+                    ]
+                },
+                {
+                    "law": "Must be round",
+                    "clues": [
+                        "I seek an object with no beginning and no end, infinite in its curve.",
+                        "It should roll away if you dropped it on a hill.",
+                        "A sphere. A ball. A circle. Do you need a diagram?"
+                    ]
+                }
             ]
         }
-
+        
 @app.post("/process_wish")
 async def process_wish(
     door_id: str = Form(...), 
