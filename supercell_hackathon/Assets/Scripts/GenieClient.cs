@@ -36,6 +36,10 @@ public class GenieClient : MonoBehaviour
     public GameObject vfxSmoke;
     public GameObject vfxSparks;
 
+    [Header("Door SFX")]
+    [Tooltip("Loaded automatically from Assets/Audio/door_creak_open")]
+    public AudioClip doorOpenSFX;
+
     [Header("Recording")]
     public int recordingLengthSec = 10;
     public int sampleRate = 44100;
@@ -51,6 +55,7 @@ public class GenieClient : MonoBehaviour
 
     // --- Session state: door rules from backend ---
     private DoorRule[] doorRules;
+    public bool rulesLoaded { get; private set; } = false;
 
     /// <summary>Returns the PipeSpawner for the current room</summary>
     private PipeSpawner ActivePipeSpawner
@@ -103,6 +108,10 @@ public class GenieClient : MonoBehaviour
 
         // Fetch door rules from backend
         StartCoroutine(FetchDoorRules());
+
+        // Auto-load door SFX if not assigned
+        if (doorOpenSFX == null)
+            doorOpenSFX = Resources.Load<AudioClip>("door_creak_open");
     }
 
     // =====================================================
@@ -122,11 +131,10 @@ public class GenieClient : MonoBehaviour
                 Debug.LogError($"[GenieClient] ❌ Failed to fetch rules: {request.error}");
                 // Use fallback rules
                 doorRules = new DoorRule[] {
-                    new DoorRule { law = "Must be red", clue = "Bring me the color of passion." },
-                    new DoorRule { law = "Must be metal", clue = "Only cold iron opens this path." },
-                    new DoorRule { law = "Must be round", clue = "I seek something with no end." }
+                    new DoorRule { law = "Must be red", clues = new string[] { "Bring me the color of passion.", "Something red.", "RED. Just make it red." } },
+                    new DoorRule { law = "Must be metal", clues = new string[] { "Only cold iron opens this path.", "Something metallic.", "METAL. Give me metal." } },
+                    new DoorRule { law = "Must be round", clues = new string[] { "I seek something with no end.", "Something that rolls.", "A SPHERE. Just a sphere." } }
                 };
-                rulesLoaded = true;
                 yield break;
             }
 
@@ -138,7 +146,6 @@ public class GenieClient : MonoBehaviour
             if (response != null && response.doors != null)
             {
                 doorRules = response.doors;
-                rulesLoaded = true;
 
                 for (int i = 0; i < doorRules.Length; i++)
                 {
@@ -146,6 +153,9 @@ public class GenieClient : MonoBehaviour
                     Debug.Log($"[GenieClient] 🚪 Door {i + 1} | Law: {doorRules[i].law} | Clues: {clueCount}");
                 }
             }
+
+            rulesLoaded = true;
+            Debug.Log("[GenieClient] ✅ Rules loaded and ready.");
         }
     }
 
@@ -169,6 +179,21 @@ public class GenieClient : MonoBehaviour
         if (keyboard.hKey.wasPressedThisFrame && !isRequestingHint)
         {
             StartCoroutine(RequestHint());
+        }
+
+        // Press F to debug-spawn a random item from the ACTIVE room's pipe only
+        if (keyboard.fKey.wasPressedThisFrame)
+        {
+            PipeSpawner pipe = ActivePipeSpawner;
+            if (pipe != null)
+            {
+                pipe.SpawnRandomItem();
+                Debug.Log($"[GenieClient] 🧪 Debug spawn from pipe for Door {currentDoorId}");
+            }
+            else
+            {
+                Debug.LogWarning("[GenieClient] No active pipe found for debug spawn!");
+            }
         }
     }
 
@@ -349,8 +374,11 @@ public class GenieClient : MonoBehaviour
 
             if (!string.IsNullOrEmpty(transition.audio_url))
             {
-                ShowSubtitle(transition.subtitle);
+                ShowSubtitle(transition.subtitle, 30f); // Long duration — keep visible during audio + reading
                 yield return StartCoroutine(PlayAudioFromUrl(serverUrl + transition.audio_url));
+                // Keep subtitle visible for extra reading time after audio
+                yield return new WaitForSeconds(6f);
+                HideSubtitle();
             }
 
             Debug.Log($"[GenieClient] 🎉 Room transition: {transition.subtitle}");
@@ -360,11 +388,29 @@ public class GenieClient : MonoBehaviour
     IEnumerator AnimateDoorOpen(GameObject door)
     {
         // Use the Easy Door System's built-in open (respects saved open/closed states)
-        var easyDoor = door.GetComponent<EasyDoorSystem.EasyDoor>();
+        // Search children too — EasyDoor component is on the "Door" child, not the parent
+        var easyDoor = door.GetComponentInChildren<EasyDoorSystem.EasyDoor>();
+
+        // Play door creak SFX
+        if (doorOpenSFX != null)
+        {
+            AudioSource doorAudio = door.GetComponentInChildren<AudioSource>();
+            if (doorAudio != null)
+            {
+                doorAudio.clip = doorOpenSFX;
+                doorAudio.spatialBlend = 0f; // 2D so player always hears it
+                doorAudio.Play();
+            }
+            else if (genieAudioSource != null)
+            {
+                genieAudioSource.PlayOneShot(doorOpenSFX);
+            }
+        }
+
         if (easyDoor != null)
         {
             easyDoor.OpenDoor();
-            Debug.Log($"[GenieClient] 🚪 Opening {door.name} via EasyDoor system");
+            Debug.Log($"[GenieClient] 🚪 Opening {easyDoor.gameObject.name} via EasyDoor system (parent: {door.name})");
         }
         else
         {
@@ -408,19 +454,36 @@ public class GenieClient : MonoBehaviour
     }
 
     // --- SUBTITLES ---
-    void ShowSubtitle(string text)
+    void ShowSubtitle(string text, float duration = -1f)
     {
         if (subtitleText == null || string.IsNullOrEmpty(text)) return;
         StopCoroutine("AutoHideSubtitle");
         subtitleText.text = text;
         subtitleText.alpha = 1f;
+
+        // Calculate duration: ~80ms per character, minimum 10s
+        if (duration < 0)
+            duration = Mathf.Max(10f, text.Length * 0.08f);
+
+        autoHideDuration = duration;
         StartCoroutine("AutoHideSubtitle");
     }
 
+    void HideSubtitle()
+    {
+        StopCoroutine("AutoHideSubtitle");
+        if (subtitleText != null)
+        {
+            subtitleText.alpha = 0f;
+            subtitleText.text = "";
+        }
+    }
+
+    private float autoHideDuration = 10f;
+
     IEnumerator AutoHideSubtitle()
     {
-        // Keep subtitle visible for 8 seconds, then fade out
-        yield return new WaitForSeconds(8f);
+        yield return new WaitForSeconds(autoHideDuration);
         float elapsed = 0f;
         while (elapsed < 1f)
         {
@@ -441,22 +504,72 @@ public class GenieClient : MonoBehaviour
     {
         if (string.IsNullOrEmpty(vfxType) || vfxType == "none") return;
 
-        GameObject vfxPrefab = null;
+        Color startColor, endColor;
+        float startSize = 0.3f;
+        float lifetime = 1.5f;
+        float rate = 15f;
+        float speed = 1f;
+
         switch (vfxType.ToLower())
         {
-            case "fire":  vfxPrefab = vfxFire; break;
-            case "smoke": vfxPrefab = vfxSmoke; break;
-            case "sparks": vfxPrefab = vfxSparks; break;
+            case "fire":
+                startColor = new Color(1f, 0.6f, 0f, 1f); // Orange
+                endColor = new Color(1f, 0f, 0f, 0f);      // Fade to red
+                startSize = 0.3f; lifetime = 0.8f; rate = 25f; speed = 1.5f;
+                break;
+            case "smoke":
+                startColor = new Color(0.5f, 0.5f, 0.5f, 0.6f); // Gray
+                endColor = new Color(0.3f, 0.3f, 0.3f, 0f);
+                startSize = 0.5f; lifetime = 2f; rate = 10f; speed = 0.5f;
+                break;
+            case "sparks":
+                startColor = new Color(1f, 0.9f, 0.3f, 1f); // Yellow
+                endColor = new Color(1f, 0.5f, 0f, 0f);
+                startSize = 0.1f; lifetime = 0.5f; rate = 30f; speed = 3f;
+                break;
+            default:
+                Debug.LogWarning($"[GenieClient] Unknown VFX type: {vfxType}");
+                return;
         }
 
-        if (vfxPrefab == null)
-        {
-            Debug.LogWarning($"[GenieClient] VFX type '{vfxType}' not found or prefab not assigned.");
-            return;
-        }
+        // Create particle system at runtime — no prefab needed
+        GameObject vfxObj = new GameObject($"VFX_{vfxType}");
+        vfxObj.transform.SetParent(target.transform);
+        vfxObj.transform.localPosition = Vector3.up * 0.2f;
 
-        GameObject vfx = Instantiate(vfxPrefab, target.transform);
-        vfx.transform.localPosition = Vector3.up * 0.2f;
+        var ps = vfxObj.AddComponent<ParticleSystem>();
+        var main = ps.main;
+        main.startLifetime = lifetime;
+        main.startSpeed = speed;
+        main.startSize = startSize;
+        main.startColor = startColor;
+        main.simulationSpace = ParticleSystemSimulationSpace.World;
+        main.maxParticles = 100;
+
+        var emission = ps.emission;
+        emission.rateOverTime = rate;
+
+        var colorOverLifetime = ps.colorOverLifetime;
+        colorOverLifetime.enabled = true;
+        Gradient grad = new Gradient();
+        grad.SetKeys(
+            new GradientColorKey[] { new GradientColorKey(startColor, 0f), new GradientColorKey(endColor, 1f) },
+            new GradientAlphaKey[] { new GradientAlphaKey(1f, 0f), new GradientAlphaKey(0f, 1f) }
+        );
+        colorOverLifetime.color = grad;
+
+        var shape = ps.shape;
+        shape.shapeType = ParticleSystemShapeType.Sphere;
+        shape.radius = 0.2f;
+
+        // Use URP-compatible particle material
+        var renderer = vfxObj.GetComponent<ParticleSystemRenderer>();
+        renderer.material = new Material(Shader.Find("Universal Render Pipeline/Particles/Unlit"));
+        renderer.material.color = startColor;
+
+        // Auto-destroy after 15 seconds
+        Destroy(vfxObj, 15f);
+
         Debug.Log($"[GenieClient] ✨ Attached {vfxType} VFX to {target.name}");
     }
 

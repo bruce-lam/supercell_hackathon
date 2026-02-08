@@ -19,13 +19,10 @@ public class DoorInitializer : MonoBehaviour
             // Disable auto-detection — doors only open via wishes
             door.automaticPlayerDetection = false;
 
-            // Force closed state
-            if (door.IsOpen)
-            {
-                door.CloseDoor();
-            }
+            // Force closed state (always call CloseDoor to handle any state)
+            door.CloseDoor();
 
-            Debug.Log($"[DoorInit] 🚪 {door.name} → locked, autoDetect OFF");
+            Debug.Log($"[DoorInit] 🚪 {door.name} → locked, autoDetect OFF, isOpen={door.IsOpen}");
         }
 
         Debug.Log($"[DoorInit] Initialized {doors.Length} door(s) — all locked.");

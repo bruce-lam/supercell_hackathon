@@ -44,7 +44,11 @@ public class PipeSpawner : MonoBehaviour
     }
 
     /// <summary>
-    /// Spawns a specific item by name (e.g., "sword", "key", "pizza")
+    /// Spawns a specific item by name. Uses fuzzy matching:
+    ///   1. Exact match (case-insensitive)
+    ///   2. Contains match (prefab name contains the search term)
+    ///   3. Keyword match (strips prefixes like "Food_", "(Prb)", numbers)
+    /// If multiple matches, picks one randomly for variety.
     /// </summary>
     public GameObject SpawnItem(string itemName)
     {
@@ -54,17 +58,84 @@ public class PipeSpawner : MonoBehaviour
             return null;
         }
 
-        // Find the prefab by name
+        string search = itemName.Trim().ToLower();
+        // Normalize: remove common prefixes for matching
+        string searchNorm = NormalizeName(search);
+
+        GameObject exactMatch = null;
+        var containsMatches = new System.Collections.Generic.List<GameObject>();
+        var keywordMatches = new System.Collections.Generic.List<GameObject>();
+
         foreach (var prefab in itemPrefabs)
         {
-            try {
-                if (prefab != null && prefab.name.ToLower() == itemName.ToLower())
-                    return DoSpawn(prefab);
-            } catch (MissingReferenceException) { continue; }
+            try { if (prefab == null) continue; } catch (MissingReferenceException) { continue; }
+
+            string pName = prefab.name.ToLower();
+            string pNorm = NormalizeName(pName);
+
+            // Tier 1: Exact match
+            if (pName == search || pNorm == searchNorm)
+            {
+                exactMatch = prefab;
+                break; // Perfect match, use it
+            }
+
+            // Tier 2: Contains (either direction)
+            if (pName.Contains(search) || search.Contains(pName))
+                containsMatches.Add(prefab);
+
+            // Tier 3: Normalized keyword match
+            if (pNorm.Contains(searchNorm) || searchNorm.Contains(pNorm))
+                keywordMatches.Add(prefab);
         }
 
-        Debug.LogWarning($"[PipeSpawner] Item '{itemName}' not found in prefab list!");
+        // Pick best match
+        GameObject chosen = null;
+        string tier = "";
+
+        if (exactMatch != null)
+        {
+            chosen = exactMatch;
+            tier = "exact";
+        }
+        else if (containsMatches.Count > 0)
+        {
+            chosen = containsMatches[Random.Range(0, containsMatches.Count)];
+            tier = $"contains ({containsMatches.Count} candidates)";
+        }
+        else if (keywordMatches.Count > 0)
+        {
+            chosen = keywordMatches[Random.Range(0, keywordMatches.Count)];
+            tier = $"keyword ({keywordMatches.Count} candidates)";
+        }
+
+        if (chosen != null)
+        {
+            Debug.Log($"[PipeSpawner] 🎯 Matched '{itemName}' → {chosen.name} ({tier})");
+            return DoSpawn(chosen);
+        }
+
+        Debug.LogWarning($"[PipeSpawner] ❌ Item '{itemName}' not found in {itemPrefabs.Length} prefabs!");
         return null;
+    }
+
+    /// <summary>
+    /// Strips common prefixes, separators, and numbers to get a clean keyword.
+    /// "(Prb)Chair1" → "chair", "Food_Apple" → "apple", "Bottle_01" → "bottle"
+    /// </summary>
+    static string NormalizeName(string name)
+    {
+        // Remove known prefixes
+        string[] prefixes = { "(prb)", "food_", "decoration_light_", "sm_", "btm_", "modular_" };
+        string n = name.ToLower().Trim();
+        foreach (var p in prefixes)
+        {
+            if (n.StartsWith(p)) n = n.Substring(p.Length);
+        }
+        // Remove trailing numbers and underscores: "bottle_01" → "bottle", "chair2" → "chair"
+        n = System.Text.RegularExpressions.Regex.Replace(n, @"[_\s]*\d+$", "");
+        n = n.TrimEnd('_', ' ');
+        return n;
     }
 
     /// <summary>

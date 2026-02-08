@@ -43,10 +43,11 @@ public class GenieIntro : MonoBehaviour
 
     void Start()
     {
-        // Reuse GenieClient's AudioSource or create one
-        audioSource = GetComponent<AudioSource>();
-        if (audioSource == null)
-            audioSource = gameObject.AddComponent<AudioSource>();
+        // Create a DEDICATED AudioSource for intro (don't share with BackgroundMusic)
+        audioSource = gameObject.AddComponent<AudioSource>();
+        audioSource.loop = false;       // Never loop the intro
+        audioSource.spatialBlend = 0f;  // 2D audio
+        audioSource.playOnAwake = false;
 
         // Hide UI initially
         if (subtitleText != null)
@@ -73,6 +74,24 @@ public class GenieIntro : MonoBehaviour
         // Don't play if already played (e.g. scene reload)
         if (introPlayed) yield break;
         introPlayed = true;
+
+        // Wait for GenieClient to finish loading rules from /get_rules
+        // This ensures /intro reads the correct current_session on the backend
+        GenieClient genieClient = FindAnyObjectByType<GenieClient>();
+        if (genieClient != null)
+        {
+            float timeout = 10f;
+            float waited = 0f;
+            while (!genieClient.rulesLoaded && waited < timeout)
+            {
+                yield return new WaitForSeconds(0.2f);
+                waited += 0.2f;
+            }
+            if (!genieClient.rulesLoaded)
+                Debug.LogWarning("[GenieIntro] ⚠️ Timed out waiting for rules — proceeding anyway");
+            else
+                Debug.Log("[GenieIntro] ✅ Rules loaded, fetching intro...");
+        }
 
         // Fetch intro from backend
         string url = $"{serverUrl}/intro";

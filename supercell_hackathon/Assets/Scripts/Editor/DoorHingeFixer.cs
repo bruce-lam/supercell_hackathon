@@ -39,19 +39,11 @@ public class DoorHingeFixer : MonoBehaviour
                 continue;
             }
 
-            // Find the Door child (the visible mesh)
-            Transform doorMesh = doorTransform.Find("Door");
-            if (doorMesh == null)
-            {
-                Debug.LogWarning($"[HingeFix] {door.name} has no 'Door' child — skipping");
-                continue;
-            }
-
-            // Calculate the door's bounds to find the hinge edge
-            Renderer[] renderers = doorMesh.GetComponentsInChildren<Renderer>();
+            // Get renderers from this object or its children
+            Renderer[] renderers = doorTransform.GetComponentsInChildren<Renderer>();
             if (renderers.Length == 0)
             {
-                Debug.LogWarning($"[HingeFix] {door.name}/Door has no renderers — skipping");
+                Debug.LogWarning($"[HingeFix] {door.name} has no renderers — skipping");
                 continue;
             }
 
@@ -60,11 +52,9 @@ public class DoorHingeFixer : MonoBehaviour
                 bounds.Encapsulate(renderers[i].bounds);
 
             // Determine hinge side (use the LEFT edge of the door in local X)
-            // The hinge is at the edge closest to the wall
             float halfWidth = bounds.extents.x;
             
             // Hinge position: current door position but shifted to the left edge
-            // We use the door's right vector to find the correct edge
             Vector3 hingeWorldPos = doorTransform.position - doorTransform.right * halfWidth;
 
             // Remember the current world position and rotation of the door
@@ -84,12 +74,7 @@ public class DoorHingeFixer : MonoBehaviour
             // Re-parent the EasyDoor under the hinge
             doorTransform.SetParent(hinge.transform, true);
 
-            // The door should now be visually in the same place, but its
-            // local origin is offset from the hinge. When it rotates,
-            // it will rotate around the hinge!
-
             // Now update the EasyDoor's saved states
-            // Closed state = current local position/rotation
             SerializedObject so = new SerializedObject(door);
             
             // Save closed state (current position)
@@ -97,7 +82,6 @@ public class DoorHingeFixer : MonoBehaviour
             so.FindProperty("closedPosition").vector3Value = doorTransform.localPosition;
 
             // Calculate open state: 90-degree rotation around the hinge
-            // Save current, rotate, capture, restore
             Vector3 closedLocalPos = doorTransform.localPosition;
             Quaternion closedLocalRot = doorTransform.localRotation;
 
@@ -120,7 +104,6 @@ public class DoorHingeFixer : MonoBehaviour
 
         if (fixed_count > 0)
         {
-            // Mark scene dirty
             UnityEditor.SceneManagement.EditorSceneManager.MarkSceneDirty(
                 UnityEditor.SceneManagement.EditorSceneManager.GetActiveScene());
         }

@@ -2,6 +2,8 @@ import os
 import json
 import uuid
 import glob
+from dotenv import load_dotenv
+load_dotenv()  # Load keys from .env file
 from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -89,8 +91,45 @@ You are a literal-minded, cynical Genie who HATES opening doors. Your default is
 - "drop_voice": Sarcastic reaction to what you're giving them (e.g. "Oh, a KEY. How... specific.")
 - "congrats_voice": When door_open is FALSE, this is your REJECTION speech. Explain exactly why it doesn't fit the law. Be cruel and specific: "It is not red. It is blue. The door remains closed. Next?"
 
-### THE ASSETS (object_name MUST be exactly one of these):
-"sword", "shield", "bomb", "hammer", "potion", "chair", "table", "bed", "toilet", "lamp", "door", "chest", "sofa", "closet", "fridge", "microwave", "tv", "coffee", "sink", "tree", "rock", "mushroom", "flower", "cloud", "fire", "pizza", "burger", "banana", "cheese", "cake", "duck", "spider", "fish", "cat", "key", "ladder", "coin", "drink", "toy", "camera", "box", "ball", "heart", "trophy", "battery", "star", "clock", "money", "firstaid", "skull", "lock", "gem", "barrel", "candle", "axe", "jug", "cup", "bag", "bucket", "food", "firewood", "fence", "stairs", "bottle", "pumpkin", "lantern", "book", "broom", "cauldron", "stove", "pan", "pot", "knife", "plate", "flashlight", "waterbottle", "pills", "cannedfood", "walkie", "matchbox", "tape", "washing_machine", "boulder", "desk", "wardrobe", "mirror", "plant", "printer", "vending", "mug", "vase", "tablelamp", "mask"
+### THE ASSETS (object_name MUST be one of these — fuzzy matching handles variants):
+# Weapons & Combat
+"sword", "shield", "bomb", "hammer", "axe", "spike_ball", "gun"
+# Furniture & Home
+"chair", "table", "bed", "toilet", "lamp", "door", "chest", "sofa", "closet", "fridge",
+"microwave", "tv", "coffee_machine", "sink", "desk", "wardrobe", "dresser", "drawer",
+"mirror", "coathanger", "bookpile", "bookopen", "rug", "carpet", "curtain",
+"washing_machine", "vase", "plant", "printer", "fatboy", "lounge_chair",
+"dining_chair", "kitchen_chair", "bedside_table", "bedside_light", "corner_sofa",
+"double_bed", "coffee_table", "ceiling_fan", "ceiling_light", "shoe_rack",
+"room_divider", "container", "document_holder", "desk_light", "corner_light",
+# Kitchen & Food
+"apple", "bread", "broccoli", "burger", "carrot", "cheese", "chicken", "corn",
+"dough", "egg", "french_fries", "hotdog", "lasagna", "lettuce", "mac_n_cheese",
+"meatballs", "meatloaf", "meat", "milk", "oil", "omelette", "parsnip", "pasta",
+"pea", "pizza", "potato", "pumpkin", "rice", "salad", "steak", "soup", "tomato",
+"sausage", "sugar", "taco", "toast", "tortilla", "waffle", "banana", "cake",
+"ketchup", "dish", "plate", "cup", "jug", "mug", "pan", "pot", "knife",
+"stove", "cauldron", "broom", "wine_glass",
+# Nature & Environment
+"tree", "rock", "mushroom", "flower", "cloud", "fire", "boulder", "stone",
+"firewood", "fence", "stairs", "wood_plank", "grass", "pumpkin",
+# Gems, Treasure & Magic
+"coin", "diamond", "ruby", "gem", "gold_bar", "gold_pile", "money", "star",
+"star_coin", "heart", "heart_gem", "trophy", "spiral", "hexagon", "crystal",
+"potion", "blue_potion", "red_potion", "green_potion", "blue_vial", "red_vial",
+"green_vial", "bottle", "thunder", "magnet", "lock", "key", "clock", "time",
+# Survival & Tools
+"flashlight", "spotlight", "waterbottle", "pills", "cannedfood", "walkie",
+"matchbox", "tape", "battery", "first_aid", "lantern", "bucket", "bag", "barrel",
+# Animals & Creatures
+"duck", "rubber_duck", "spider", "fish", "cat", "skull", "skull_bones", "eyeball",
+# Sports Balls
+"baseball", "basketball", "football", "golf", "soccer", "tennis", "volleyball",
+"wooden_ball", "atom_ball", "bomb_ball", "bucky_ball", "wheel_ball",
+# Office & Misc
+"camera", "box", "crate", "ladder", "toy", "drink", "musical_instrument",
+"dumbbell", "scratching_post", "air_hockey", "painting", "mask",
+"clothes", "training_item", "speed_chevron", "cuboid", "cube"
 
 ### TONE:
 Use ellipses (...) and CAPS for emphasis. Bored, gravelly, unimpressed. When rejecting, be smug and precise.
