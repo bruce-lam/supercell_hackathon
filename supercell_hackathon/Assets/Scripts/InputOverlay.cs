@@ -68,7 +68,7 @@ public class InputOverlay : MonoBehaviour
         controlsText.lineSpacing = 8;
 
         // Find GenieClient
-        genieClient = FindObjectOfType<GenieClient>();
+        genieClient = FindAnyObjectByType<GenieClient>();
 
         UpdateDisplay();
     }

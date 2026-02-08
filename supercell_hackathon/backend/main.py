@@ -466,9 +466,15 @@ INTRO_TEMPLATE = (
 @app.get("/intro")
 def get_intro():
     """Generate the Genie's intro monologue, including Door 1's first (hard) clue"""
-    # Get Door 1's first clue (hard) from session
-    clue = "well, you'll just have to figure it out yourself!"
+    # MANDATORY: ensure rules are generated before intro so clue is always present
     doors = current_session.get("doors", [])
+    if not doors:
+        print("⚠️ /intro called before /get_rules — auto-generating rules...")
+        get_rules()  # Generate rules now
+        doors = current_session.get("doors", [])
+    
+    # Get Door 1's first clue (hard) — should always exist now
+    clue = "well, you'll just have to figure it out yourself!"
     if doors:
         clues = doors[0].get("clues", [])
         if clues:
