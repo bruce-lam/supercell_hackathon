@@ -36,8 +36,8 @@ app.add_middleware(
 
 # --- CLIENTS ---
 # Dual-mode: try Gemini first, fall back to OpenAI
-GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "AIzaSyCP5K2A_Ba0vzkqKRCxGFob8ov2XH326Pk")
-OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY", "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")
+GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "PLACEHOLDER")
+OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY", "PLACEHOLDER")
 
 # Gemini via OpenAI-compatible endpoint
 gemini_openai_client = None
@@ -63,7 +63,7 @@ if OPENAI_API_KEY != "PLACEHOLDER":
 else:
     print("\u26a0\ufe0f OpenAI key not set, skipping")
 
-eleven_client = ElevenLabs(api_key=os.environ.get("ELEVEN_API_KEY", "f68b860b0e1b635287b7e1b4473ca997cc30bc6c31be60cbc57b4764557159da"))
+eleven_client = ElevenLabs(api_key=os.environ.get("ELEVEN_API_KEY", "PLACEHOLDER"))
 
 
 def chat_completion(messages, response_format=None):
